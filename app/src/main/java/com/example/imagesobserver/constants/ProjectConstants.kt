@@ -43,6 +43,18 @@ object ProjectConstants {
     /** ContentProvider path segment for share URIs. */
     const val SHARE_PATH = "share"
 
+    /** [android.net.Uri] scheme for [ImageUrlShareContentProvider] URIs. */
+    const val CONTENT_URI_SCHEME = "content"
+
+    /** [UriMatcher] wildcard for a numeric share id segment. */
+    const val IMAGE_URL_SHARE_URI_ID_WILDCARD = "#"
+
+    /** [ImageUrlShareContentProvider.openFile] when the URI path is not supported. */
+    const val IMAGE_URL_SHARE_UNSUPPORTED_URI_FORMAT = "Unsupported URI: %s"
+
+    /** [ImageUrlShareContentProvider.openFile] when the share id is not in the registry. */
+    const val IMAGE_URL_SHARE_UNKNOWN_ID_FORMAT = "Unknown share id: %d"
+
     /** [NetworkLogInterceptor] success line format: method, URL, status code, duration ms. */
     const val NETWORK_LOG_HTTP_SUCCESS_FORMAT = "HTTP %s %s -> %d (%d ms)"
 
