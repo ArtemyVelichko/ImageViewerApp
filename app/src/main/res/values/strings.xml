@@ -1,3 +1,22 @@
 <resources>
     <string name="app_name">ImagesObserver</string>
+    <string name="retry">Retry</string>
+    <string name="content_description_image">Image</string>
+    <string name="nav_home_title">Home</string>
+    <string name="nav_open_images">Open image list</string>
+    <string name="error_load_image_urls_default">Failed to load image URLs</string>
+    <string name="images_list_will_retry_when_online">Will retry automatically when you are online</string>
+    <string name="error_no_images_list_data">Images list is missing in cache and remote refresh failed</string>
+    <string name="error_http_download_failed">HTTP %1$d for %2$s</string>
+    <string name="error_empty_response_body">Empty body for %1$s</string>
+    <string name="error_decode_image_bytes">Failed to decode image bytes</string>
+    <string name="error_smart_retry_no_attempts">Retry finished without executing any attempt</string>
+    <string name="error_max_attempts_invalid">maxAttempts must be at least 1</string>
+    <string name="image_grid_placeholder_invalid">—</string>
+    <string name="image_load_failed">Load failed</string>
+    <string name="image_detail_title">Image</string>
+    <string name="image_detail_back">Back</string>
+    <string name="image_share">Share</string>
+    <string name="image_open_in_browser">Browser</string>
+    <string name="image_share_chooser_title">Share image URL</string>
 </resources>
