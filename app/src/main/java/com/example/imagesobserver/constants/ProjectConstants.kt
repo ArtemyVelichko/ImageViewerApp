@@ -38,6 +38,9 @@ object ProjectConstants {
     /** Multiplier applied to one-finger pan delta on the zoomed detail image. */
     const val IMAGE_PAN_DRAG_SENSITIVITY = 4f
 
+    /** Fixed zoom scale on the detail screen (double-tap and pinch cap). */
+    const val IMAGE_DETAIL_ZOOM_SCALE = 2f
+
     /** ContentProvider authority suffix for sharing image URLs via [content://]. */
     const val IMAGE_URL_SHARE_AUTHORITY_SUFFIX = ".imageurl.share"
 

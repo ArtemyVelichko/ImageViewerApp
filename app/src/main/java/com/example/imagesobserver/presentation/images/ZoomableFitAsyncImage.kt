@@ -91,11 +91,10 @@ private enum class HorizontalDragMode {
 /**
  * Routes one-finger horizontal drags either to image pan or to the parent [HorizontalPager].
  *
- * After touch slop, the gesture is classified once:
- * - **Swipe** — horizontal movement ≥ [Dimens.imageHorizontalPanSwipeThreshold] and mostly horizontal.
- *   Events are not consumed so the pager can flip pages.
- * - **Pan** — image is zoomed in ([ZoomPanState.scale] > 1) and the drag is shorter / not clearly horizontal.
- *   Delta is multiplied by [ProjectConstants.IMAGE_PAN_DRAG_SENSITIVITY].
+ * Classification is re-evaluated while the finger moves. [Dimens.imageHorizontalPanSwipeThreshold]
+ * separates the modes when zoomed in:
+ * - **Swipe** — horizontal movement ≥ threshold and mostly horizontal → pager flips pages.
+ * - **Pan** — zoomed in and horizontal movement still below threshold → image pan.
  *
  * Pinch zoom is handled separately by [Modifier.transformable] with [canPan] disabled.
  */
@@ -126,21 +125,12 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectPa
 
             accumulated += delta
 
-            if (mode == HorizontalDragMode.Undecided &&
-                accumulated.getDistance() >= touchSlop
-            ) {
-                val horizontal = accumulated.x.absoluteValue
-                val vertical = accumulated.y.absoluteValue
-                mode = when {
-                    horizontal >= swipeThresholdPx && horizontal > vertical ->
-                        HorizontalDragMode.Swipe
-
-                    zoomState.scale > 1.001f ->
-                        HorizontalDragMode.Pan
-
-                    else ->
-                        HorizontalDragMode.Swipe
-                }
+            if (accumulated.getDistance() >= touchSlop) {
+                mode = classifyHorizontalDragMode(
+                    accumulated = accumulated,
+                    swipeThresholdPx = swipeThresholdPx,
+                    isZoomed = zoomState.scale > 1.001f,
+                )
             }
 
             when (mode) {
@@ -163,6 +153,25 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectPa
     }
 }
 
+private fun classifyHorizontalDragMode(
+    accumulated: Offset,
+    swipeThresholdPx: Float,
+    isZoomed: Boolean,
+): HorizontalDragMode {
+    val horizontal = accumulated.x.absoluteValue
+    val vertical = accumulated.y.absoluteValue
+    return when {
+        horizontal >= swipeThresholdPx && horizontal > vertical ->
+            HorizontalDragMode.Swipe
+
+        isZoomed && horizontal < swipeThresholdPx ->
+            HorizontalDragMode.Pan
+
+        else ->
+            HorizontalDragMode.Swipe
+    }
+}
+
 /**
  * Full-screen image with [ContentScale.Fit], pinch-to-zoom, and pan when zoomed in.
  *
@@ -171,13 +180,13 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectPa
  * - **Short drag while zoomed** — pans the image ([detectPanOrPagerSwipe]).
  * - **Long horizontal drag** — left to the pager (next/previous image).
  * - **Single tap** — [onSingleTap] (e.g. toggle fullscreen UI).
- * - **Double tap** — [ZoomPanState.reset].
+ * - **Double tap** — toggles fit and [ProjectConstants.IMAGE_DETAIL_ZOOM_SCALE], or [ZoomPanState.reset].
  *
  * Modifier order matters: [combinedClickable] is outermost so [transformable] can still
  * receive pinch first; tap detectors that consume down events too early would block paging.
  *
  * @param zoomState Per-page state from [rememberZoomPanState].
- * @param maxScale Upper zoom limit (default 8×).
+ * @param maxScale Upper zoom limit (defaults to [ProjectConstants.IMAGE_DETAIL_ZOOM_SCALE]).
  * @param onSingleTap Called on a single tap on the image or letterbox area.
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -187,7 +196,7 @@ fun ZoomableFitAsyncImage(
     loadCachedOriginal: suspend (ImageUrl) -> File?,
     zoomState: ZoomPanState,
     modifier: Modifier = Modifier,
-    maxScale: Float = 8f,
+    maxScale: Float = ProjectConstants.IMAGE_DETAIL_ZOOM_SCALE,
     onSingleTap: () -> Unit = {},
 ) {
     var contentSize by remember { mutableStateOf(IntSize(1, 1)) }
@@ -204,7 +213,14 @@ fun ZoomableFitAsyncImage(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onSingleTap,
-                onDoubleClick = { zoomState.reset() },
+                onDoubleClick = {
+                    if (zoomState.scale <= 1.001f) {
+                        zoomState.scale = ProjectConstants.IMAGE_DETAIL_ZOOM_SCALE
+                        zoomState.panOffset = Offset.Zero
+                    } else {
+                        zoomState.reset()
+                    }
+                },
             ),
     ) {
         val wPx = contentSize.width.toFloat().coerceAtLeast(1f)
