@@ -48,7 +48,12 @@ class ImagesViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             observeImagesGridUseCase().collect { result ->
-                result.onSuccess { onManifestRefreshed() }
+                result.onSuccess { items ->
+                    val previousItems = _uiState.value.items
+                    if (previousItems.isNotEmpty() && items != previousItems) {
+                        onManifestRefreshed()
+                    }
+                }
                 applyGridResult(result)
             }
         }
@@ -65,7 +70,9 @@ class ImagesViewModel @Inject constructor(
     }
 
     private fun applyGridResult(result: Result<List<ManifestGridRow>>) {
-        _uiState.update { it.copy(isLoading = true, error = null) }
+        if (_uiState.value.items.isEmpty()) {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+        }
         result
             .onSuccess { items ->
                 _uiState.update {

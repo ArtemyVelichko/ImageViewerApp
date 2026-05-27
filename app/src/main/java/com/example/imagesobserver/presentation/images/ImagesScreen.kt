@@ -85,10 +85,6 @@ fun ImagesScreenContent(
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         when {
-            state.isLoading && state.items.isEmpty() -> {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            }
-
             state.error != null && state.items.isEmpty() -> {
                 Column(
                     modifier = Modifier
@@ -108,6 +104,10 @@ fun ImagesScreenContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+
+            state.isLoading && state.items.isEmpty() -> {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             }
 
             else -> {
@@ -200,7 +200,11 @@ private val previewGridItems = persistentListOf(
 private fun ImagesScreenGridPreview() {
     ImagesObserverTheme(dynamicColor = false) {
         ImagesScreenContent(
-            state = ImagesUiState(items = previewGridItems, gridColumnCount = 3),
+            state = ImagesUiState(
+                items = previewGridItems,
+                gridColumnCount = 3,
+                isLoading = false,
+            ),
             openableUrls = persistentSetOf("https://it-link.ru/images/1.jpg"),
             brokenUrls = persistentSetOf(),
             onOpenImageDetail = {},
@@ -237,6 +241,7 @@ private fun ImagesScreenErrorPreview() {
     ImagesObserverTheme(dynamicColor = false) {
         ImagesScreenContent(
             state = ImagesUiState(
+                isLoading = false,
                 error = "Images list is missing in cache and remote refresh failed",
             ),
             openableUrls = persistentSetOf(),

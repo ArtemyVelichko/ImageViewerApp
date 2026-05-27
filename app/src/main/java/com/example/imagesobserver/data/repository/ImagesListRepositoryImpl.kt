@@ -7,6 +7,7 @@ import com.example.imagesobserver.domain.repository.ImagesListRepository
 import com.example.imagesobserver.di.IoDispatcher
 import com.example.imagesobserver.util.smartRetry
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,6 +21,7 @@ class ImagesListRepositoryImpl @Inject constructor(
 ) : ImagesListRepository {
 
     override suspend fun fetchRemoteList(): String = withContext(ioDispatcher) {
+        delay(1000)
         smartRetry(appErrorFactory) {
             imagesRetrofit.imagesManifestApi.downloadManifestFile()
         }
