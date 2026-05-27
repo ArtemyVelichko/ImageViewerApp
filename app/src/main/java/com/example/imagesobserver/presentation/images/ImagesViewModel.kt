@@ -4,14 +4,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.imagesobserver.R
 import com.example.imagesobserver.data.local.provider.ResourceProvider
-import com.example.imagesobserver.data.session.ImageGallerySession
+import com.example.imagesobserver.domain.repository.ImageGalleryRepository
+import com.example.imagesobserver.domain.model.DisplayableImageResult
 import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.domain.model.ManifestGridRow
 import com.example.imagesobserver.domain.usecase.LoadGridThumbnailUseCase
 import com.example.imagesobserver.domain.usecase.ObserveImagesGridUseCase
+import com.example.imagesobserver.domain.usecase.OpenImageGalleryFromGridUseCase
+import com.example.imagesobserver.domain.validation.DisplayableImageValidator
+import com.example.imagesobserver.domain.validation.resolveDisplayable
 import com.example.imagesobserver.presentation.images.model.ImagesUiState
+import com.example.imagesobserver.presentation.theme.Dimens
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.PersistentSet
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,28 +31,34 @@ import javax.inject.Inject
 class ImagesViewModel @Inject constructor(
     private val observeImagesGridUseCase: ObserveImagesGridUseCase,
     private val loadGridThumbnailUseCase: LoadGridThumbnailUseCase,
+    private val displayableImageValidator: DisplayableImageValidator,
     private val resourceProvider: ResourceProvider,
-    private val gallerySession: ImageGallerySession,
+    private val imageGalleryRepository: ImageGalleryRepository,
+    private val openImageGalleryFromGridUseCase: OpenImageGalleryFromGridUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ImagesUiState())
     val uiState: StateFlow<ImagesUiState> = _uiState.asStateFlow()
 
+    private val _openableUrls = MutableStateFlow<PersistentSet<String>>(persistentSetOf())
+    val openableUrls: StateFlow<PersistentSet<String>> = _openableUrls.asStateFlow()
+
+    private val _brokenUrls = MutableStateFlow<PersistentSet<String>>(persistentSetOf())
+    val brokenUrls: StateFlow<PersistentSet<String>> = _brokenUrls.asStateFlow()
+
     init {
         viewModelScope.launch {
-            observeImagesGridUseCase().collect { applyGridResult(it) }
+            observeImagesGridUseCase().collect { result ->
+                result.onSuccess { resetGridThumbnailState() }
+                applyGridResult(result)
+            }
         }
     }
 
-    /**
-     * Recomputes [ImagesUiState.gridColumnCount] from the grid content width in **physical pixels**
-     * (after horizontal padding) and horizontal spacing between cells, targeting cell width **100–120 px**.
-     * Call when configuration or width changes (e.g. rotation).
-     */
-    fun updateGridLayout(contentWidthPx: Int, cellSpacingPx: Int) {
+    fun updateGridLayout(contentWidthDp: Float, cellSpacingDp: Float) {
         val columns = computeColumnCount(
-            contentWidthPx = contentWidthPx,
-            cellSpacingPx = cellSpacingPx,
+            contentWidthDp = contentWidthDp,
+            cellSpacingDp = cellSpacingDp,
         )
         _uiState.update { prev ->
             if (prev.gridColumnCount == columns) prev else prev.copy(gridColumnCount = columns)
@@ -75,39 +88,90 @@ class ImagesViewModel @Inject constructor(
             }
     }
 
-    /** Grid thumbnail from disk cache (cell size in physical pixels). */
-    suspend fun loadGridThumbnail(imageUrl: ImageUrl, widthPx: Int, heightPx: Int): File? =
-        loadGridThumbnailUseCase(imageUrl, widthPx, heightPx)
-
-    fun prepareImageDetailOpen(clicked: ImageUrl): Int {
-        val links = _uiState.value.items.mapNotNull { row ->
-            when (row) {
-                is ManifestGridRow.Link -> row.url
-                is ManifestGridRow.InvalidLine -> null
+    /** Loads grid thumbnail; updates [openableUrls]. Network errors stay retryable (not broken). */
+    suspend fun loadGridThumbnail(imageUrl: ImageUrl, widthPx: Int, heightPx: Int): File? {
+        val file = loadGridThumbnailUseCase(imageUrl, widthPx, heightPx)
+        if (file == null) {
+            setOpenable(imageUrl, false)
+            return null
+        }
+        return when (val result = displayableImageValidator.resolveDisplayable(file)) {
+            is DisplayableImageResult.Displayable -> {
+                setOpenable(imageUrl, true)
+                result.file
+            }
+            DisplayableImageResult.NotDisplayable -> {
+                setOpenable(imageUrl, false)
+                imageGalleryRepository.markBroken(imageUrl)
+                addBroken(imageUrl)
+                null
             }
         }
-        gallerySession.setUrls(links)
-        return links.indexOf(clicked).takeIf { it >= 0 } ?: 0
+    }
+
+    fun syncBrokenUrlsFromRepository() {
+        val synced = imageGalleryRepository.getBrokenUrls()
+        val next = persistentSetOf<String>().builder().apply { addAll(synced) }.build()
+        if (next != _brokenUrls.value) {
+            _brokenUrls.value = next
+        }
+    }
+
+    fun onRetryGridThumbnail(imageUrl: ImageUrl) {
+        imageGalleryRepository.unmarkBroken(imageUrl)
+        removeBroken(imageUrl)
+        setOpenable(imageUrl, false)
+    }
+
+    fun openDetailFromGrid(clicked: ImageUrl): Int? =
+        openImageGalleryFromGridUseCase(
+            clicked = clicked,
+            items = _uiState.value.items,
+            openableUrls = _openableUrls.value,
+        )
+
+    /** Clears pager broken list and grid open/broken UI state when manifest is refreshed. */
+    private fun resetGridThumbnailState() {
+        imageGalleryRepository.clearBroken()
+        _openableUrls.value = persistentSetOf()
+        _brokenUrls.value = persistentSetOf()
+    }
+
+    private fun addBroken(imageUrl: ImageUrl) {
+        val next = _brokenUrls.value.builder().apply { add(imageUrl.url) }.build()
+        if (next != _brokenUrls.value) {
+            _brokenUrls.value = next
+        }
+    }
+
+    private fun removeBroken(imageUrl: ImageUrl) {
+        val next = _brokenUrls.value.builder().apply { remove(imageUrl.url) }.build()
+        if (next != _brokenUrls.value) {
+            _brokenUrls.value = next
+        }
+    }
+
+    private fun setOpenable(imageUrl: ImageUrl, openable: Boolean) {
+        val next = _openableUrls.value.builder().apply {
+            if (openable) add(imageUrl.url) else remove(imageUrl.url)
+        }.build()
+        if (next != _openableUrls.value) {
+            _openableUrls.value = next
+        }
     }
 
     private companion object {
-        /** Target cell width band (physical px) for column count. */
-        private const val GRID_CELL_MIN_WIDTH_PX = 100
-        private const val GRID_CELL_MAX_WIDTH_PX = 120
-
-        /**
-         * Maximizes columns with cell width ≥ [GRID_CELL_MIN_WIDTH_PX]; if cells would exceed
-         * [GRID_CELL_MAX_WIDTH_PX], adds columns. Narrow viewports may use one column wider than max.
-         */
-        fun computeColumnCount(contentWidthPx: Int, cellSpacingPx: Int): Int {
-            val w = contentWidthPx
-            val s = cellSpacingPx.coerceAtLeast(0)
-            if (w <= 0) return 1
-            var n = ((w + s) / (GRID_CELL_MIN_WIDTH_PX + s)).coerceAtLeast(1)
-            fun cellWidthFor(columnCount: Int): Double =
-                (w - (columnCount - 1) * s.toDouble()) / columnCount
-            while (n < 512 && cellWidthFor(n) > GRID_CELL_MAX_WIDTH_PX) n++
-            while (n > 1 && cellWidthFor(n) < GRID_CELL_MIN_WIDTH_PX) n--
+        fun computeColumnCount(contentWidthDp: Float, cellSpacingDp: Float): Int {
+            val w = contentWidthDp
+            val s = cellSpacingDp.coerceAtLeast(0f)
+            val minW = Dimens.imageGridCellMinWidth.value
+            val maxW = Dimens.imageGridCellMaxWidth.value
+            if (w <= 0f) return 1
+            var n = ((w + s) / (minW + s)).toInt().coerceAtLeast(1)
+            fun cellWidthFor(columnCount: Int): Float =
+                (w - (columnCount - 1) * s) / columnCount
+            while (n < 512 && cellWidthFor(n) > maxW) n++
+            while (n > 1 && cellWidthFor(n) < minW) n--
             return n.coerceAtLeast(1)
         }
     }

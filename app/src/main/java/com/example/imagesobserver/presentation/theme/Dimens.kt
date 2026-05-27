@@ -27,7 +27,17 @@ object Dimens {
 
     val imageGridCellSpacing = 8.dp
 
+    /** Target cell width band for column count (TZ: 100–120 dp). */
+    val imageGridCellMinWidth = 100.dp
+
+    val imageGridCellMaxWidth = 120.dp
+
     val imageThumbnailCorner = 8.dp
+
+    /** Grid cell reload button — fills most of the cell width (cells are 100–120 dp). */
+    val imageGridRetryButtonMinHeight = 52.dp
+
+    val imageGridRetryContentPadding = 6.dp
 
     /** Small inline progress indicator (e.g. thumbnail slot while building Coil request). */
     val circularProgressIndicatorSmall = 24.dp

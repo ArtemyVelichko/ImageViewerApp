@@ -24,8 +24,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
-import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.imagesobserver.R
 import com.example.imagesobserver.domain.model.ImageUrl
@@ -36,7 +36,9 @@ import com.example.imagesobserver.presentation.images.model.ImagesUiState
 import com.example.imagesobserver.presentation.theme.Dimens
 import com.example.imagesobserver.presentation.theme.ImagesObserverTheme
 import java.io.File
+import kotlinx.collections.immutable.PersistentSet
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentSetOf
 
 @Composable
 fun ImagesScreen(
@@ -45,24 +47,37 @@ fun ImagesScreen(
     viewModel: ImagesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val openableUrls by viewModel.openableUrls.collectAsStateWithLifecycle()
+    val brokenUrls by viewModel.brokenUrls.collectAsStateWithLifecycle()
+
+    LifecycleResumeEffect(Unit) {
+        viewModel.syncBrokenUrlsFromRepository()
+        onPauseOrDispose { }
+    }
 
     ImagesScreenContent(
         state = state,
+        openableUrls = openableUrls,
+        brokenUrls = brokenUrls,
         modifier = modifier,
         onOpenImageDetail = onOpenImageDetail,
         loadGridThumbnail = viewModel::loadGridThumbnail,
         onGridLayoutChanged = viewModel::updateGridLayout,
-        resolveDetailStartIndex = viewModel::prepareImageDetailOpen,
+        openDetailFromGrid = viewModel::openDetailFromGrid,
+        onRetryGridThumbnail = viewModel::onRetryGridThumbnail,
     )
 }
 
 @Composable
 fun ImagesScreenContent(
     state: ImagesUiState,
+    openableUrls: PersistentSet<String>,
+    brokenUrls: PersistentSet<String>,
     onOpenImageDetail: (Int) -> Unit,
     loadGridThumbnail: suspend (ImageUrl, Int, Int) -> File?,
-    onGridLayoutChanged: (contentWidthPx: Int, cellSpacingPx: Int) -> Unit,
-    resolveDetailStartIndex: (ImageUrl) -> Int,
+    onGridLayoutChanged: (contentWidthDp: Float, cellSpacingDp: Float) -> Unit,
+    openDetailFromGrid: (ImageUrl) -> Int?,
+    onRetryGridThumbnail: (ImageUrl) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -94,9 +109,7 @@ fun ImagesScreenContent(
 
             else -> {
                 val density = LocalDensity.current
-                val spacingPx = remember(density) {
-                    with(density) { Dimens.imageGridCellSpacing.toPx().roundToInt() }
-                }
+                val spacingDp = Dimens.imageGridCellSpacing.value
                 var gridWidthPx by remember { mutableIntStateOf(0) }
                 Box(
                     modifier = Modifier
@@ -104,9 +117,10 @@ fun ImagesScreenContent(
                         .padding(horizontal = Dimens.imageGridHorizontalMargin)
                         .onSizeChanged { gridWidthPx = it.width },
                 ) {
-                    LaunchedEffect(gridWidthPx, spacingPx) {
+                    LaunchedEffect(gridWidthPx, spacingDp, density) {
                         if (gridWidthPx > 0) {
-                            onGridLayoutChanged(gridWidthPx, spacingPx)
+                            val contentWidthDp = with(density) { gridWidthPx.toDp().value }
+                            onGridLayoutChanged(contentWidthDp, spacingDp)
                         }
                     }
                     val columns = state.gridColumnCount.coerceAtLeast(1)
@@ -131,8 +145,14 @@ fun ImagesScreenContent(
                                     ImageThumbnailCell(
                                         imageUrl = row.url,
                                         loadGridThumbnail = loadGridThumbnail,
-                                        onClick = {
-                                            onOpenImageDetail(resolveDetailStartIndex(row.url))
+                                        isPermanentlyBroken = row.url.url in brokenUrls,
+                                        onRetryGridThumbnail = onRetryGridThumbnail,
+                                        onClick = if (row.url.url in openableUrls) {
+                                            {
+                                                openDetailFromGrid(row.url)?.let(onOpenImageDetail)
+                                            }
+                                        } else {
+                                            null
                                         },
                                     )
 
@@ -154,7 +174,12 @@ fun ImagesScreenContent(
     }
 }
 
+private val previewOnRetryGridThumbnail: (ImageUrl) -> Unit = {}
+
 private val previewLoadGridThumbnail: suspend (ImageUrl, Int, Int) -> File? = { _, _, _ -> null }
+
+/** Preview stub: grid clicks do not open detail. */
+private val previewOpenDetailFromGrid: (ImageUrl) -> Int? = { null }
 
 private val previewGridItems = persistentListOf(
     ManifestGridRow.Link(ImageUrl("https://it-link.ru/images/1.jpg")),
@@ -169,10 +194,13 @@ private fun ImagesScreenGridPreview() {
     ImagesObserverTheme(dynamicColor = false) {
         ImagesScreenContent(
             state = ImagesUiState(items = previewGridItems, gridColumnCount = 3),
+            openableUrls = persistentSetOf("https://it-link.ru/images/1.jpg"),
+            brokenUrls = persistentSetOf(),
             onOpenImageDetail = {},
             loadGridThumbnail = previewLoadGridThumbnail,
             onGridLayoutChanged = { _, _ -> },
-            resolveDetailStartIndex = { 0 },
+            openDetailFromGrid = previewOpenDetailFromGrid,
+            onRetryGridThumbnail = previewOnRetryGridThumbnail,
         )
     }
 }
@@ -183,10 +211,13 @@ private fun ImagesScreenLoadingPreview() {
     ImagesObserverTheme(dynamicColor = false) {
         ImagesScreenContent(
             state = ImagesUiState(isLoading = true),
+            openableUrls = persistentSetOf(),
+            brokenUrls = persistentSetOf(),
             onOpenImageDetail = {},
             loadGridThumbnail = previewLoadGridThumbnail,
             onGridLayoutChanged = { _, _ -> },
-            resolveDetailStartIndex = { 0 },
+            openDetailFromGrid = previewOpenDetailFromGrid,
+            onRetryGridThumbnail = previewOnRetryGridThumbnail,
         )
     }
 }
@@ -199,10 +230,13 @@ private fun ImagesScreenErrorPreview() {
             state = ImagesUiState(
                 error = "Images list is missing in cache and remote refresh failed",
             ),
+            openableUrls = persistentSetOf(),
+            brokenUrls = persistentSetOf(),
             onOpenImageDetail = {},
             loadGridThumbnail = previewLoadGridThumbnail,
             onGridLayoutChanged = { _, _ -> },
-            resolveDetailStartIndex = { 0 },
+            openDetailFromGrid = previewOpenDetailFromGrid,
+            onRetryGridThumbnail = previewOnRetryGridThumbnail,
         )
     }
 }

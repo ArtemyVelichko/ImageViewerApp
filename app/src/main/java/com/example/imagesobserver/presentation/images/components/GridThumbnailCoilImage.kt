@@ -4,14 +4,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -20,18 +28,20 @@ import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import com.example.imagesobserver.R
 import com.example.imagesobserver.domain.model.ImageUrl
+import com.example.imagesobserver.presentation.theme.Dimens
 import java.io.File
 
 /**
  * Grid cell image for [com.example.imagesobserver.presentation.images.ImagesScreen] only.
- * Shows a cached thumbnail file or a neutral «—» placeholder — never loads the remote URL here,
- * so there is no Coil error UI and no «Load failed» / Retry on the grid.
+ * Failed downloads show Retry; permanently invalid bitmaps show «—».
  */
 @Composable
 fun GridThumbnailCoilImage(
     imageUrl: ImageUrl,
     loadGridThumbnail: suspend (ImageUrl, Int, Int) -> File?,
-    onOpenDetail: () -> Unit,
+    isPermanentlyBroken: Boolean,
+    onRetryGridThumbnail: (ImageUrl) -> Unit,
+    onClick: (() -> Unit)?,
     targetWidthPx: Int,
     targetHeightPx: Int,
     modifier: Modifier = Modifier,
@@ -39,41 +49,36 @@ fun GridThumbnailCoilImage(
     val context = LocalContext.current
     var thumbnailFile by remember(imageUrl, targetWidthPx, targetHeightPx) { mutableStateOf<File?>(null) }
     var resolved by remember(imageUrl, targetWidthPx, targetHeightPx) { mutableStateOf(false) }
+    var reloadAttempt by remember(imageUrl, targetWidthPx, targetHeightPx) { mutableIntStateOf(0) }
 
-    LaunchedEffect(imageUrl, targetWidthPx, targetHeightPx, loadGridThumbnail) {
+    suspend fun loadThumbnail() {
         resolved = false
         thumbnailFile = loadGridThumbnail(imageUrl, targetWidthPx, targetHeightPx)
         resolved = true
     }
 
+    LaunchedEffect(imageUrl, targetWidthPx, targetHeightPx, loadGridThumbnail, reloadAttempt) {
+        loadThumbnail()
+    }
+
+    val onRetry: () -> Unit = {
+        onRetryGridThumbnail(imageUrl)
+        reloadAttempt++
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .clickable(onClick = onOpenDetail),
+            .alpha(if (onClick != null) 1f else 0.72f)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(onClick = onClick)
+                } else {
+                    Modifier
+                },
+            ),
     ) {
         when {
-            thumbnailFile != null -> {
-                val file = thumbnailFile!!
-                val request = remember(file) {
-                    ImageRequest.Builder(context)
-                        .data(file)
-                        .crossfade(true)
-                        .build()
-                }
-                SubcomposeAsyncImage(
-                    model = request,
-                    contentDescription = stringResource(R.string.content_description_image),
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    error = {
-                        ImageGridPlaceholderCell(modifier = Modifier.fillMaxSize())
-                    },
-                    success = {
-                        SubcomposeAsyncImageContent(modifier = Modifier.fillMaxSize())
-                    },
-                )
-            }
-
             !resolved -> {
                 Box(
                     modifier = Modifier
@@ -82,9 +87,86 @@ fun GridThumbnailCoilImage(
                 )
             }
 
-            else -> {
+            thumbnailFile != null -> {
+                val file = thumbnailFile!!
+                var coilDecodeFailed by remember(file, reloadAttempt) { mutableStateOf(false) }
+                val request = remember(file, reloadAttempt) {
+                    ImageRequest.Builder(context)
+                        .data(file)
+                        .crossfade(true)
+                        .build()
+                }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    SubcomposeAsyncImage(
+                        model = request,
+                        contentDescription = stringResource(R.string.content_description_image),
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        onSuccess = { coilDecodeFailed = false },
+                        onError = { coilDecodeFailed = true },
+                        loading = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                            )
+                        },
+                        success = {
+                            SubcomposeAsyncImageContent(modifier = Modifier.fillMaxSize())
+                        },
+                        error = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                            )
+                        },
+                    )
+                    if (coilDecodeFailed) {
+                        ImageGridRetryCell(
+                            onRetry = onRetry,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+            }
+
+            isPermanentlyBroken -> {
                 ImageGridPlaceholderCell(modifier = Modifier.fillMaxSize())
             }
+
+            else -> {
+                ImageGridRetryCell(
+                    onRetry = onRetry,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ImageGridRetryCell(
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        FilledTonalButton(
+            onClick = onRetry,
+            modifier = Modifier
+                .padding(horizontal = Dimens.imageGridRetryContentPadding)
+                .fillMaxWidth()
+                .height(Dimens.imageGridRetryButtonMinHeight),
+        ) {
+            Text(
+                text = stringResource(R.string.retry),
+                style = MaterialTheme.typography.titleMedium,
+            )
         }
     }
 }

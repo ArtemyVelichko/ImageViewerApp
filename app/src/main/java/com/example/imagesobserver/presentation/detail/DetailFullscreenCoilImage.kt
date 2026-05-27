@@ -2,18 +2,14 @@ package com.example.imagesobserver.presentation.detail
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -31,7 +27,7 @@ import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.presentation.theme.Dimens
 import java.io.File
 
-/** Full-screen detail image with "Load failed" + Retry — not used on the grid. */
+/** Full-screen detail image; reload is handled on the grid, not here. */
 @Composable
 fun DetailFullscreenCoilImage(
     imageUrl: ImageUrl,
@@ -40,13 +36,9 @@ fun DetailFullscreenCoilImage(
     imageModifier: Modifier = Modifier.fillMaxSize(),
     contentScale: ContentScale = ContentScale.Fit,
 ) {
-    var retryKey by remember(imageUrl) { mutableIntStateOf(0) }
-    val onRetry: () -> Unit = { retryKey++ }
-
     val request = rememberDetailCoilImageRequest(
         imageUrl = imageUrl,
         loadCachedOriginal = loadCachedOriginal,
-        retryKey = retryKey,
     )
 
     val placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
@@ -65,7 +57,7 @@ fun DetailFullscreenCoilImage(
                 )
             },
             error = {
-                ImageLoadRetryContent(onRetry = onRetry)
+                ImageLoadFailedContent(modifier = Modifier.fillMaxSize())
             },
             success = {
                 SubcomposeAsyncImageContent(
@@ -81,21 +73,18 @@ fun DetailFullscreenCoilImage(
 private fun rememberDetailCoilImageRequest(
     imageUrl: ImageUrl,
     loadCachedOriginal: suspend (ImageUrl) -> File?,
-    retryKey: Int,
 ): ImageRequest {
     val context = LocalContext.current
     var dataSource by remember(imageUrl) { mutableStateOf<Any>(imageUrl.url) }
 
-    LaunchedEffect(imageUrl, loadCachedOriginal, retryKey) {
+    LaunchedEffect(imageUrl, loadCachedOriginal) {
         val cachedFile = loadCachedOriginal(imageUrl)
         if (cachedFile != null) {
             dataSource = cachedFile
-        } else if (retryKey > 0) {
-            dataSource = imageUrl.url
         }
     }
 
-    return remember(dataSource, retryKey) {
+    return remember(dataSource) {
         ImageRequest.Builder(context)
             .data(dataSource)
             .crossfade(true)
@@ -104,29 +93,17 @@ private fun rememberDetailCoilImageRequest(
 }
 
 @Composable
-private fun ImageLoadRetryContent(
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+private fun ImageLoadFailedContent(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .fillMaxSize()
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center,
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Dimens.imagesListErrorItemSpacing),
+        Text(
+            text = stringResource(R.string.image_load_failed),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(Dimens.imagesListErrorScreenPadding),
-        ) {
-            Text(
-                text = stringResource(R.string.image_load_failed),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            FilledTonalButton(onClick = onRetry) {
-                Text(stringResource(R.string.retry))
-            }
-        }
+        )
     }
 }

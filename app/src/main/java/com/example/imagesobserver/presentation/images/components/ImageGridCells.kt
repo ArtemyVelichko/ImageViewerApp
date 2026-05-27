@@ -35,11 +35,6 @@ fun ImageGridPlaceholderCell(modifier: Modifier = Modifier) {
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = stringResource(R.string.image_grid_placeholder_invalid),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -47,7 +42,9 @@ fun ImageGridPlaceholderCell(modifier: Modifier = Modifier) {
 fun ImageThumbnailCell(
     imageUrl: ImageUrl,
     loadGridThumbnail: suspend (ImageUrl, Int, Int) -> File?,
-    onClick: () -> Unit,
+    isPermanentlyBroken: Boolean,
+    onRetryGridThumbnail: (ImageUrl) -> Unit,
+    onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     var cellSize by remember { mutableStateOf(IntSize(1, 1)) }
@@ -66,7 +63,9 @@ fun ImageThumbnailCell(
             loadGridThumbnail = loadGridThumbnail,
             targetWidthPx = wPx,
             targetHeightPx = hPx,
-            onOpenDetail = onClick,
+            isPermanentlyBroken = isPermanentlyBroken,
+            onRetryGridThumbnail = onRetryGridThumbnail,
+            onClick = onClick,
             modifier = Modifier.fillMaxSize(),
         )
     }

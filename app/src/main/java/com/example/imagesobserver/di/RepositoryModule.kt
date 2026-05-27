@@ -1,12 +1,12 @@
 package com.example.imagesobserver.di
 
 import com.example.imagesobserver.data.connectivity.NetworkConnectivityObserver
+import com.example.imagesobserver.data.repository.ImageGalleryRepositoryImpl
 import com.example.imagesobserver.data.repository.ImagesListRepositoryImpl
 import com.example.imagesobserver.data.repository.OriginalImageCacheRepositoryImpl
 import com.example.imagesobserver.data.repository.ThumbnailImageCacheRepositoryImpl
-import com.example.imagesobserver.data.session.ImageGallerySession
-import com.example.imagesobserver.data.session.ImageGallerySessionImpl
 import com.example.imagesobserver.domain.connectivity.NetworkAvailabilitySource
+import com.example.imagesobserver.domain.repository.ImageGalleryRepository
 import com.example.imagesobserver.domain.repository.ImagesListRepository
 import com.example.imagesobserver.domain.repository.OriginalImageCacheRepository
 import com.example.imagesobserver.domain.repository.ThumbnailImageCacheRepository
@@ -38,7 +38,7 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindImageGallerySession(impl: ImageGallerySessionImpl): ImageGallerySession
+    abstract fun bindImageGalleryRepository(impl: ImageGalleryRepositoryImpl): ImageGalleryRepository
 
     @Binds
     @Singleton
