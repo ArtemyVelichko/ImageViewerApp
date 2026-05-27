@@ -5,14 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.imagesobserver.R
 import com.example.imagesobserver.data.local.provider.ResourceProvider
 import com.example.imagesobserver.domain.repository.ImageGalleryRepository
-import com.example.imagesobserver.domain.model.DisplayableImageResult
+import com.example.imagesobserver.domain.model.GridThumbnailResult
 import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.domain.model.ManifestGridRow
-import com.example.imagesobserver.domain.usecase.LoadGridThumbnailUseCase
 import com.example.imagesobserver.domain.usecase.ObserveImagesGridUseCase
 import com.example.imagesobserver.domain.usecase.OpenImageGalleryFromGridUseCase
-import com.example.imagesobserver.domain.validation.DisplayableImageValidator
-import com.example.imagesobserver.domain.validation.resolveDisplayable
+import com.example.imagesobserver.domain.usecase.ResetGridOnManifestRefreshUseCase
+import com.example.imagesobserver.domain.usecase.ResolveGridThumbnailUseCase
 import com.example.imagesobserver.presentation.images.model.ImagesUiState
 import com.example.imagesobserver.presentation.theme.Dimens
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,11 +29,11 @@ import javax.inject.Inject
 @HiltViewModel
 class ImagesViewModel @Inject constructor(
     private val observeImagesGridUseCase: ObserveImagesGridUseCase,
-    private val loadGridThumbnailUseCase: LoadGridThumbnailUseCase,
-    private val displayableImageValidator: DisplayableImageValidator,
+    private val resolveGridThumbnailUseCase: ResolveGridThumbnailUseCase,
     private val resourceProvider: ResourceProvider,
     private val imageGalleryRepository: ImageGalleryRepository,
     private val openImageGalleryFromGridUseCase: OpenImageGalleryFromGridUseCase,
+    private val resetGridOnManifestRefreshUseCase: ResetGridOnManifestRefreshUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ImagesUiState())
@@ -49,7 +48,7 @@ class ImagesViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             observeImagesGridUseCase().collect { result ->
-                result.onSuccess { resetGridThumbnailState() }
+                result.onSuccess { onManifestRefreshed() }
                 applyGridResult(result)
             }
         }
@@ -89,25 +88,29 @@ class ImagesViewModel @Inject constructor(
     }
 
     /** Loads grid thumbnail; updates [openableUrls]. Network errors stay retryable (not broken). */
-    suspend fun loadGridThumbnail(imageUrl: ImageUrl, widthPx: Int, heightPx: Int): File? {
-        val file = loadGridThumbnailUseCase(imageUrl, widthPx, heightPx)
-        if (file == null) {
-            setOpenable(imageUrl, false)
-            return null
-        }
-        return when (val result = displayableImageValidator.resolveDisplayable(file)) {
-            is DisplayableImageResult.Displayable -> {
-                setOpenable(imageUrl, true)
+    suspend fun loadGridThumbnail(imageUrl: ImageUrl, widthPx: Int, heightPx: Int): File? =
+        when (val result = resolveGridThumbnailUseCase(imageUrl, widthPx, heightPx)) {
+            is GridThumbnailResult.Displayable -> {
+                markOpenable(imageUrl)
                 result.file
             }
-            DisplayableImageResult.NotDisplayable -> {
-                setOpenable(imageUrl, false)
+            GridThumbnailResult.LoadFailed -> {
+                unmarkOpenable(imageUrl)
+                null
+            }
+            GridThumbnailResult.Invalid -> {
+                unmarkOpenable(imageUrl)
                 imageGalleryRepository.markBroken(imageUrl)
                 addBroken(imageUrl)
                 null
             }
         }
-    }
+
+    fun peekGridThumbnail(
+        imageUrl: ImageUrl,
+        widthPx: Int,
+        heightPx: Int,
+    ): GridThumbnailResult? = resolveGridThumbnailUseCase.peek(imageUrl, widthPx, heightPx)
 
     fun syncBrokenUrlsFromRepository() {
         val synced = imageGalleryRepository.getBrokenUrls()
@@ -118,9 +121,10 @@ class ImagesViewModel @Inject constructor(
     }
 
     fun onRetryGridThumbnail(imageUrl: ImageUrl) {
+        resolveGridThumbnailUseCase.evict(imageUrl)
         imageGalleryRepository.unmarkBroken(imageUrl)
         removeBroken(imageUrl)
-        setOpenable(imageUrl, false)
+        unmarkOpenable(imageUrl)
     }
 
     fun openDetailFromGrid(clicked: ImageUrl): Int? =
@@ -130,9 +134,8 @@ class ImagesViewModel @Inject constructor(
             openableUrls = _openableUrls.value,
         )
 
-    /** Clears pager broken list and grid open/broken UI state when manifest is refreshed. */
-    private fun resetGridThumbnailState() {
-        imageGalleryRepository.clearBroken()
+    private fun onManifestRefreshed() {
+        resetGridOnManifestRefreshUseCase()
         _openableUrls.value = persistentSetOf()
         _brokenUrls.value = persistentSetOf()
     }
@@ -151,12 +154,17 @@ class ImagesViewModel @Inject constructor(
         }
     }
 
-    private fun setOpenable(imageUrl: ImageUrl, openable: Boolean) {
-        val next = _openableUrls.value.builder().apply {
-            if (openable) add(imageUrl.url) else remove(imageUrl.url)
-        }.build()
-        if (next != _openableUrls.value) {
-            _openableUrls.value = next
+    private fun markOpenable(imageUrl: ImageUrl) {
+        _openableUrls.update { current ->
+            if (imageUrl.url in current) current
+            else current.builder().apply { add(imageUrl.url) }.build()
+        }
+    }
+
+    private fun unmarkOpenable(imageUrl: ImageUrl) {
+        _openableUrls.update { current ->
+            if (imageUrl.url !in current) current
+            else current.builder().apply { remove(imageUrl.url) }.build()
         }
     }
 

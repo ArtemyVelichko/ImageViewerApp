@@ -20,6 +20,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import com.example.imagesobserver.R
+import com.example.imagesobserver.domain.model.GridThumbnailResult
 import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.presentation.theme.Dimens
 import java.io.File
@@ -42,6 +43,7 @@ fun ImageGridPlaceholderCell(modifier: Modifier = Modifier) {
 fun ImageThumbnailCell(
     imageUrl: ImageUrl,
     loadGridThumbnail: suspend (ImageUrl, Int, Int) -> File?,
+    peekGridThumbnail: (ImageUrl, Int, Int) -> GridThumbnailResult?,
     isPermanentlyBroken: Boolean,
     onRetryGridThumbnail: (ImageUrl) -> Unit,
     onClick: (() -> Unit)?,
@@ -61,6 +63,7 @@ fun ImageThumbnailCell(
         GridThumbnailCoilImage(
             imageUrl = imageUrl,
             loadGridThumbnail = loadGridThumbnail,
+            peekGridThumbnail = peekGridThumbnail,
             targetWidthPx = wPx,
             targetHeightPx = hPx,
             isPermanentlyBroken = isPermanentlyBroken,

@@ -28,6 +28,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.imagesobserver.R
+import com.example.imagesobserver.domain.model.GridThumbnailResult
 import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.domain.model.ManifestGridRow
 import com.example.imagesobserver.presentation.images.components.ImageGridPlaceholderCell
@@ -62,6 +63,7 @@ fun ImagesScreen(
         modifier = modifier,
         onOpenImageDetail = onOpenImageDetail,
         loadGridThumbnail = viewModel::loadGridThumbnail,
+        peekGridThumbnail = viewModel::peekGridThumbnail,
         onGridLayoutChanged = viewModel::updateGridLayout,
         openDetailFromGrid = viewModel::openDetailFromGrid,
         onRetryGridThumbnail = viewModel::onRetryGridThumbnail,
@@ -75,6 +77,7 @@ fun ImagesScreenContent(
     brokenUrls: PersistentSet<String>,
     onOpenImageDetail: (Int) -> Unit,
     loadGridThumbnail: suspend (ImageUrl, Int, Int) -> File?,
+    peekGridThumbnail: (ImageUrl, Int, Int) -> GridThumbnailResult?,
     onGridLayoutChanged: (contentWidthDp: Float, cellSpacingDp: Float) -> Unit,
     openDetailFromGrid: (ImageUrl) -> Int?,
     onRetryGridThumbnail: (ImageUrl) -> Unit,
@@ -145,6 +148,7 @@ fun ImagesScreenContent(
                                     ImageThumbnailCell(
                                         imageUrl = row.url,
                                         loadGridThumbnail = loadGridThumbnail,
+                                        peekGridThumbnail = peekGridThumbnail,
                                         isPermanentlyBroken = row.url.url in brokenUrls,
                                         onRetryGridThumbnail = onRetryGridThumbnail,
                                         onClick = if (row.url.url in openableUrls) {
@@ -178,6 +182,9 @@ private val previewOnRetryGridThumbnail: (ImageUrl) -> Unit = {}
 
 private val previewLoadGridThumbnail: suspend (ImageUrl, Int, Int) -> File? = { _, _, _ -> null }
 
+private val previewPeekGridThumbnail: (ImageUrl, Int, Int) -> GridThumbnailResult? =
+    { _, _, _ -> null }
+
 /** Preview stub: grid clicks do not open detail. */
 private val previewOpenDetailFromGrid: (ImageUrl) -> Int? = { null }
 
@@ -198,6 +205,7 @@ private fun ImagesScreenGridPreview() {
             brokenUrls = persistentSetOf(),
             onOpenImageDetail = {},
             loadGridThumbnail = previewLoadGridThumbnail,
+            peekGridThumbnail = previewPeekGridThumbnail,
             onGridLayoutChanged = { _, _ -> },
             openDetailFromGrid = previewOpenDetailFromGrid,
             onRetryGridThumbnail = previewOnRetryGridThumbnail,
@@ -215,6 +223,7 @@ private fun ImagesScreenLoadingPreview() {
             brokenUrls = persistentSetOf(),
             onOpenImageDetail = {},
             loadGridThumbnail = previewLoadGridThumbnail,
+            peekGridThumbnail = previewPeekGridThumbnail,
             onGridLayoutChanged = { _, _ -> },
             openDetailFromGrid = previewOpenDetailFromGrid,
             onRetryGridThumbnail = previewOnRetryGridThumbnail,
@@ -234,6 +243,7 @@ private fun ImagesScreenErrorPreview() {
             brokenUrls = persistentSetOf(),
             onOpenImageDetail = {},
             loadGridThumbnail = previewLoadGridThumbnail,
+            peekGridThumbnail = previewPeekGridThumbnail,
             onGridLayoutChanged = { _, _ -> },
             openDetailFromGrid = previewOpenDetailFromGrid,
             onRetryGridThumbnail = previewOnRetryGridThumbnail,

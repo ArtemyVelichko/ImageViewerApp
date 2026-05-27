@@ -27,6 +27,7 @@ import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import com.example.imagesobserver.R
+import com.example.imagesobserver.domain.model.GridThumbnailResult
 import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.presentation.theme.Dimens
 import java.io.File
@@ -39,6 +40,7 @@ import java.io.File
 fun GridThumbnailCoilImage(
     imageUrl: ImageUrl,
     loadGridThumbnail: suspend (ImageUrl, Int, Int) -> File?,
+    peekGridThumbnail: (ImageUrl, Int, Int) -> GridThumbnailResult?,
     isPermanentlyBroken: Boolean,
     onRetryGridThumbnail: (ImageUrl) -> Unit,
     onClick: (() -> Unit)?,
@@ -47,8 +49,17 @@ fun GridThumbnailCoilImage(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    var thumbnailFile by remember(imageUrl, targetWidthPx, targetHeightPx) { mutableStateOf<File?>(null) }
-    var resolved by remember(imageUrl, targetWidthPx, targetHeightPx) { mutableStateOf(false) }
+    val cachedEntry = remember(imageUrl, targetWidthPx, targetHeightPx) {
+        peekGridThumbnail(imageUrl, targetWidthPx, targetHeightPx)
+    }
+    var thumbnailFile by remember(imageUrl, targetWidthPx, targetHeightPx) {
+        mutableStateOf(
+            (cachedEntry as? GridThumbnailResult.Displayable)?.file,
+        )
+    }
+    var resolved by remember(imageUrl, targetWidthPx, targetHeightPx) {
+        mutableStateOf(cachedEntry != null)
+    }
     var reloadAttempt by remember(imageUrl, targetWidthPx, targetHeightPx) { mutableIntStateOf(0) }
 
     suspend fun loadThumbnail() {
@@ -58,6 +69,7 @@ fun GridThumbnailCoilImage(
     }
 
     LaunchedEffect(imageUrl, targetWidthPx, targetHeightPx, loadGridThumbnail, reloadAttempt) {
+        if (reloadAttempt == 0 && cachedEntry != null) return@LaunchedEffect
         loadThumbnail()
     }
 
@@ -89,11 +101,12 @@ fun GridThumbnailCoilImage(
 
             thumbnailFile != null -> {
                 val file = thumbnailFile!!
+                val fromMemoryCache = reloadAttempt == 0 && cachedEntry is GridThumbnailResult.Displayable
                 var coilDecodeFailed by remember(file, reloadAttempt) { mutableStateOf(false) }
-                val request = remember(file, reloadAttempt) {
+                val request = remember(file, reloadAttempt, fromMemoryCache) {
                     ImageRequest.Builder(context)
                         .data(file)
-                        .crossfade(true)
+                        .crossfade(!fromMemoryCache)
                         .build()
                 }
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -108,7 +121,13 @@ fun GridThumbnailCoilImage(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    .background(
+                                        if (fromMemoryCache) {
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0f)
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceVariant
+                                        },
+                                    ),
                             )
                         },
                         success = {

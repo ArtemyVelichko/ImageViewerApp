@@ -32,6 +32,9 @@ object ProjectConstants {
     /** When over [IMAGE_CACHE_MAX_BYTES], evict oldest files until usage ≤ cap × this ratio. */
     const val IMAGE_CACHE_EVICT_TARGET_RATIO = 0.8f
 
+    /** Max grid thumbnail resolve results kept in [GridThumbnailMemoryCache]. */
+    const val GRID_THUMBNAIL_MEMORY_CACHE_MAX_ENTRIES = 300
+
     /** Multiplier applied to one-finger pan delta on the zoomed detail image. */
     const val IMAGE_PAN_DRAG_SENSITIVITY = 4f
 
