@@ -20,7 +20,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import coil.compose.SubcomposeAsyncImage
@@ -31,6 +30,7 @@ import com.example.imagesobserver.domain.model.GridThumbnailResult
 import com.example.imagesobserver.domain.model.ImageGalleryUrlStatus
 import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.presentation.theme.Dimens
+import com.example.imagesobserver.presentation.theme.GridThumbnailConstants
 import java.io.File
 
 /**
@@ -53,7 +53,7 @@ fun GridThumbnailCoilImage(
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .alpha(0.72f),
+                .alpha(GridThumbnailConstants.DISABLED_CELL_ALPHA),
         ) {
             ImageGridPlaceholderCell(modifier = Modifier.fillMaxSize())
         }
@@ -72,7 +72,9 @@ fun GridThumbnailCoilImage(
     var resolved by remember(imageUrl, targetWidthPx, targetHeightPx) {
         mutableStateOf(cachedEntry != null)
     }
-    var reloadAttempt by remember(imageUrl, targetWidthPx, targetHeightPx) { mutableIntStateOf(0) }
+    var reloadAttempt by remember(imageUrl, targetWidthPx, targetHeightPx) {
+        mutableIntStateOf(GridThumbnailConstants.INITIAL_RELOAD_ATTEMPT)
+    }
 
     suspend fun loadThumbnail() {
         resolved = false
@@ -81,7 +83,11 @@ fun GridThumbnailCoilImage(
     }
 
     LaunchedEffect(imageUrl, targetWidthPx, targetHeightPx, loadGridThumbnail, reloadAttempt) {
-        if (reloadAttempt == 0 && cachedEntry is GridThumbnailResult.Displayable) return@LaunchedEffect
+        if (reloadAttempt == GridThumbnailConstants.INITIAL_RELOAD_ATTEMPT &&
+            cachedEntry is GridThumbnailResult.Displayable
+        ) {
+            return@LaunchedEffect
+        }
         loadThumbnail()
     }
 
@@ -90,10 +96,16 @@ fun GridThumbnailCoilImage(
         reloadAttempt++
     }
 
+    val cellAlpha = if (onClick != null) {
+        GridThumbnailConstants.FULL_ALPHA
+    } else {
+        GridThumbnailConstants.DISABLED_CELL_ALPHA
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .alpha(if (onClick != null) 1f else 0.72f)
+            .alpha(cellAlpha)
             .then(
                 if (onClick != null) {
                     Modifier.clickable(onClick = onClick)
@@ -113,7 +125,8 @@ fun GridThumbnailCoilImage(
 
             thumbnailFile != null -> {
                 val file = thumbnailFile!!
-                val fromMemoryCache = reloadAttempt == 0 && cachedEntry is GridThumbnailResult.Displayable
+                val fromMemoryCache = reloadAttempt == GridThumbnailConstants.INITIAL_RELOAD_ATTEMPT &&
+                    cachedEntry is GridThumbnailResult.Displayable
                 var coilDecodeFailed by remember(file, reloadAttempt) { mutableStateOf(false) }
                 val request = remember(file, reloadAttempt, fromMemoryCache) {
                     ImageRequest.Builder(context)
@@ -121,12 +134,17 @@ fun GridThumbnailCoilImage(
                         .crossfade(!fromMemoryCache)
                         .build()
                 }
+                val loadingBackgroundAlpha = if (fromMemoryCache) {
+                    GridThumbnailConstants.TRANSPARENT_ALPHA
+                } else {
+                    GridThumbnailConstants.FULL_ALPHA
+                }
                 Box(modifier = Modifier.fillMaxSize()) {
                     SubcomposeAsyncImage(
                         model = request,
                         contentDescription = stringResource(R.string.content_description_image),
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
+                        contentScale = GridThumbnailConstants.contentScale,
                         onSuccess = { coilDecodeFailed = false },
                         onError = { coilDecodeFailed = true },
                         loading = {
@@ -134,11 +152,9 @@ fun GridThumbnailCoilImage(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .background(
-                                        if (fromMemoryCache) {
-                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0f)
-                                        } else {
-                                            MaterialTheme.colorScheme.surfaceVariant
-                                        },
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(
+                                            alpha = loadingBackgroundAlpha,
+                                        ),
                                     ),
                             )
                         },
