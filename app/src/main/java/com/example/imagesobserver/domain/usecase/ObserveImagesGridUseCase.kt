@@ -3,9 +3,11 @@ package com.example.imagesobserver.domain.usecase
 import com.example.imagesobserver.domain.connectivity.NetworkAvailabilitySource
 import com.example.imagesobserver.domain.error.AppErrorFactory
 import com.example.imagesobserver.domain.model.ManifestGridRow
+import com.example.imagesobserver.domain.prefetch.ImagesListPrefetchGate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.merge
 import javax.inject.Inject
 
 /**
@@ -16,6 +18,7 @@ class ObserveImagesGridUseCase @Inject constructor(
     private val loadCachedManifestRowsUseCase: LoadCachedManifestRowsUseCase,
     private val refreshImagesGridFromRemoteUseCase: RefreshImagesGridFromRemoteUseCase,
     private val networkAvailabilitySource: NetworkAvailabilitySource,
+    private val imagesListPrefetchGate: ImagesListPrefetchGate,
     private val appErrorFactory: AppErrorFactory,
 ) {
 
@@ -48,9 +51,26 @@ class ObserveImagesGridUseCase @Inject constructor(
                 null
             }
 
+            val recoveredCache = if (cachedRows == null && refreshedRows == null) {
+                try {
+                    loadCachedManifestRowsUseCase()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
+            } else {
+                null
+            }
+
             when {
                 refreshedRows != null && refreshedRows != cachedRows -> {
                     val result = Result.success(refreshedRows)
+                    lastResult = result
+                    send(result)
+                }
+                recoveredCache != null -> {
+                    val result = Result.success(recoveredCache)
                     lastResult = result
                     send(result)
                 }
@@ -65,7 +85,10 @@ class ObserveImagesGridUseCase @Inject constructor(
         }
 
         loadAndEmit()
-        networkAvailabilitySource.networkAvailable.collect {
+        merge(
+            networkAvailabilitySource.networkAvailable,
+            imagesListPrefetchGate.manifestCached,
+        ).collect {
             if (shouldRetryAfterNetworkReturn(lastResult)) {
                 loadAndEmit()
             }
