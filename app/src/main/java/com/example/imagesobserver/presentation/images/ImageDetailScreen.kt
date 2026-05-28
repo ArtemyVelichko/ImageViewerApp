@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.imagesobserver.R
+import com.example.imagesobserver.domain.model.ImageGalleryUrlStatus
 import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.presentation.detail.ImageDetailViewModel
 import com.example.imagesobserver.presentation.detail.model.DetailPagerState
@@ -127,6 +128,7 @@ fun ImageDetailScreen(
                 DetailPagerSection(
                     state = pagerState,
                     loadCachedOriginal = viewModel::loadCachedOriginal,
+                    onLoadPage = viewModel::loadPage,
                     onToggleChrome = toggleChrome,
                     onPageSettled = viewModel::onPageSettled,
                     modifier = Modifier.fillMaxSize(),
@@ -141,6 +143,7 @@ fun ImageDetailScreen(
 private fun DetailPagerSection(
     state: DetailPagerState,
     loadCachedOriginal: suspend (ImageUrl) -> File?,
+    onLoadPage: (ImageUrl) -> Unit,
     onToggleChrome: () -> Unit,
     onPageSettled: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -172,14 +175,40 @@ private fun DetailPagerSection(
         key = { page -> urls[page].url },
     ) { page ->
         val imageUrl = urls[page]
+        if (state.statusFor(imageUrl) == ImageGalleryUrlStatus.Broken) return@HorizontalPager
+
         val zoomState = rememberZoomPanState(imageKey = imageUrl.url)
 
-        ZoomableFitAsyncImage(
-            imageUrl = imageUrl,
-            loadCachedOriginal = loadCachedOriginal,
-            zoomState = zoomState,
-            modifier = Modifier.fillMaxSize(),
-            onSingleTap = onToggleChrome,
-        )
+        when (state.statusFor(imageUrl)) {
+            ImageGalleryUrlStatus.Openable -> {
+                ZoomableFitAsyncImage(
+                    imageUrl = imageUrl,
+                    loadCachedOriginal = loadCachedOriginal,
+                    zoomState = zoomState,
+                    modifier = Modifier.fillMaxSize(),
+                    onSingleTap = onToggleChrome,
+                )
+            }
+
+            ImageGalleryUrlStatus.Loading -> {
+                LaunchedEffect(imageUrl) {
+                    onLoadPage(imageUrl)
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onToggleChrome,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+
+            ImageGalleryUrlStatus.Broken -> Unit
+        }
     }
 }
