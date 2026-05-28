@@ -6,8 +6,8 @@ import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 import javax.inject.Inject
 
-/** Reads and parses the cached images manifest from private disk storage. */
-class LoadCachedImagesGridUseCase @Inject constructor(
+/** Reads and parses the cached images manifest from private disk storage into grid rows. */
+class LoadCachedManifestRowsUseCase @Inject constructor(
     private val imagesListRepository: ImagesListRepository,
     private val parseManifestLinesToGridRowsUseCase: ParseManifestLinesToGridRowsUseCase,
 ) {

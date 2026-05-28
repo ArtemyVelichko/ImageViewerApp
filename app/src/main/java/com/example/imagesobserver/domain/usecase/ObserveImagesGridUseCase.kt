@@ -13,7 +13,7 @@ import javax.inject.Inject
  * and retry when the network returns after a failed or empty load.
  */
 class ObserveImagesGridUseCase @Inject constructor(
-    private val loadCachedImagesGridUseCase: LoadCachedImagesGridUseCase,
+    private val loadCachedManifestRowsUseCase: LoadCachedManifestRowsUseCase,
     private val refreshImagesGridFromRemoteUseCase: RefreshImagesGridFromRemoteUseCase,
     private val networkAvailabilitySource: NetworkAvailabilitySource,
     private val appErrorFactory: AppErrorFactory,
@@ -24,7 +24,7 @@ class ObserveImagesGridUseCase @Inject constructor(
 
         suspend fun loadAndEmit() {
             val cachedRows = try {
-                loadCachedImagesGridUseCase()
+                loadCachedManifestRowsUseCase()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

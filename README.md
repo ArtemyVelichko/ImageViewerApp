@@ -89,7 +89,7 @@ Android-приложение для просмотра списка изобра
 - **Repository** в domain как интерфейс, реализация в data.
 - **Use cases** инкапсулируют сценарии (grid, cache, share, prefetch).
 - **Hilt** для DI, **`@IoDispatcher`** для disk/network/encode на `Dispatchers.IO`.
-- **Offline-first**: `LoadCachedImagesGridUseCase` + `RefreshImagesGridFromRemoteUseCase` + `ObserveImagesGridUseCase` с подпиской на сеть.
+- **Offline-first**: `LoadCachedManifestRowsUseCase` + `RefreshImagesGridFromRemoteUseCase` + `ObserveImagesGridUseCase` с подпиской на сеть.
 - **Navigation Compose** + type-safe routes (`kotlinx.serialization`).
 
 ### Структура пакетов
