@@ -22,11 +22,11 @@ interface ImageGalleryRepository {
 
     fun setUrlStatus(imageUrl: ImageUrl, status: ImageGalleryUrlStatus)
 
-    fun markLoading(imageUrl: ImageUrl)
+    fun markUrlLoading(imageUrl: ImageUrl)
 
-    fun markOpenable(imageUrl: ImageUrl)
+    fun markUrlOpenable(imageUrl: ImageUrl)
 
-    fun markBroken(imageUrl: ImageUrl)
+    fun markUrlBroken(imageUrl: ImageUrl)
 
     fun clearLoadState()
 }

@@ -22,7 +22,7 @@ class LoadCachedOriginalFileUseCase @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            imageGalleryRepository.markBroken(imageUrl)
+            imageGalleryRepository.markUrlBroken(imageUrl)
             null
         }
     }

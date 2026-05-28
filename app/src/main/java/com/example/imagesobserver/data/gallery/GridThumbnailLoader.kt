@@ -28,17 +28,17 @@ class GridThumbnailLoader @Inject constructor(
         if (imageGalleryRepository.getUrlStatus(imageUrl) == ImageGalleryUrlStatus.Broken) return null
         when (resolveGridThumbnailUseCase.peek(imageUrl, widthPx, heightPx)) {
             GridThumbnailResult.Invalid -> {
-                imageGalleryRepository.markBroken(imageUrl)
+                imageGalleryRepository.markUrlBroken(imageUrl)
                 return null
             }
             is GridThumbnailResult.Displayable -> {
-                markOpenableIfLoading(imageUrl)
+                markUrlOpenableIfLoading(imageUrl)
                 return displayableFile(imageUrl, widthPx, heightPx)
             }
             GridThumbnailResult.LoadFailed, null -> Unit
         }
         if (isDisplayableCached(imageUrl, widthPx, heightPx)) {
-            markOpenableIfLoading(imageUrl)
+            markUrlOpenableIfLoading(imageUrl)
             return displayableFile(imageUrl, widthPx, heightPx)
         }
         val mutex = loadMutexes.computeIfAbsent(jobKey(imageUrl, widthPx, heightPx)) { Mutex() }
@@ -55,7 +55,7 @@ class GridThumbnailLoader @Inject constructor(
 
     fun retry(imageUrl: ImageUrl, widthPx: Int, heightPx: Int) {
         resolveGridThumbnailUseCase.evict(imageUrl)
-        imageGalleryRepository.markLoading(imageUrl)
+        imageGalleryRepository.markUrlLoading(imageUrl)
         applicationScope.launch {
             load(imageUrl, widthPx, heightPx)
         }
@@ -64,9 +64,9 @@ class GridThumbnailLoader @Inject constructor(
     fun isDisplayableCached(imageUrl: ImageUrl, widthPx: Int, heightPx: Int): Boolean =
         resolveGridThumbnailUseCase.peek(imageUrl, widthPx, heightPx) is GridThumbnailResult.Displayable
 
-    private fun markOpenableIfLoading(imageUrl: ImageUrl) {
+    private fun markUrlOpenableIfLoading(imageUrl: ImageUrl) {
         if (imageGalleryRepository.getUrlStatus(imageUrl) == ImageGalleryUrlStatus.Loading) {
-            imageGalleryRepository.markOpenable(imageUrl)
+            imageGalleryRepository.markUrlOpenable(imageUrl)
         }
     }
 
@@ -77,15 +77,15 @@ class GridThumbnailLoader @Inject constructor(
     private fun applyResult(imageUrl: ImageUrl, result: GridThumbnailResult): File? =
         when (result) {
             is GridThumbnailResult.Displayable -> {
-                imageGalleryRepository.markOpenable(imageUrl)
+                imageGalleryRepository.markUrlOpenable(imageUrl)
                 result.file
             }
             GridThumbnailResult.LoadFailed -> {
-                imageGalleryRepository.markLoading(imageUrl)
+                imageGalleryRepository.markUrlLoading(imageUrl)
                 null
             }
             GridThumbnailResult.Invalid -> {
-                imageGalleryRepository.markBroken(imageUrl)
+                imageGalleryRepository.markUrlBroken(imageUrl)
                 null
             }
         }

@@ -45,11 +45,11 @@ class ImageGalleryRepositoryImpl @Inject constructor() : ImageGalleryRepository 
         }
     }
 
-    override fun markLoading(imageUrl: ImageUrl) = setUrlStatus(imageUrl, ImageGalleryUrlStatus.Loading)
+    override fun markUrlLoading(imageUrl: ImageUrl) = setUrlStatus(imageUrl, ImageGalleryUrlStatus.Loading)
 
-    override fun markOpenable(imageUrl: ImageUrl) = setUrlStatus(imageUrl, ImageGalleryUrlStatus.Openable)
+    override fun markUrlOpenable(imageUrl: ImageUrl) = setUrlStatus(imageUrl, ImageGalleryUrlStatus.Openable)
 
-    override fun markBroken(imageUrl: ImageUrl) = setUrlStatus(imageUrl, ImageGalleryUrlStatus.Broken)
+    override fun markUrlBroken(imageUrl: ImageUrl) = setUrlStatus(imageUrl, ImageGalleryUrlStatus.Broken)
 
     override fun clearLoadState() {
         synchronized(lock) {
