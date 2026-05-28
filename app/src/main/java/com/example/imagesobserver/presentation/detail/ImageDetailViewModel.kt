@@ -7,7 +7,7 @@ import com.example.imagesobserver.domain.model.ImageGalleryUrlStatus
 import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.domain.repository.ImageGalleryRepository
 import com.example.imagesobserver.domain.sharing.ImageUrlShareGateway
-import com.example.imagesobserver.domain.usecase.LoadCachedOriginalUseCase
+import com.example.imagesobserver.domain.usecase.LoadCachedOriginalFileUseCase
 import com.example.imagesobserver.presentation.detail.model.DetailPagerState
 import com.example.imagesobserver.presentation.detail.model.InitialPageIndex
 import com.example.imagesobserver.presentation.detail.model.SettledPageIndex
@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class ImageDetailViewModel @Inject constructor(
     private val imageGalleryRepository: ImageGalleryRepository,
-    private val loadCachedOriginalUseCase: LoadCachedOriginalUseCase,
+    private val loadCachedOriginalFileUseCase: LoadCachedOriginalFileUseCase,
     private val imageUrlShareGateway: ImageUrlShareGateway,
 ) : ViewModel() {
 
@@ -59,7 +59,7 @@ class ImageDetailViewModel @Inject constructor(
 
     suspend fun loadCachedOriginal(imageUrl: ImageUrl): File? {
         if (imageGalleryRepository.getUrlStatus(imageUrl) != ImageGalleryUrlStatus.Openable) return null
-        return loadCachedOriginalUseCase(imageUrl)
+        return loadCachedOriginalFileUseCase(imageUrl)
     }
 
     fun shareCurrentImageUrl() {

@@ -9,7 +9,7 @@ import java.io.File
 import javax.inject.Inject
 
 /** Resolves a cached original [File] for the detail screen; null when cache/network failed. */
-class LoadCachedOriginalUseCase @Inject constructor(
+class LoadCachedOriginalFileUseCase @Inject constructor(
     private val originalImageCacheRepository: OriginalImageCacheRepository,
     private val imageGalleryRepository: ImageGalleryRepository,
 ) {

@@ -79,7 +79,7 @@ Android-приложение для просмотра списка изобра
 | Слой | Назначение | Примеры |
 |------|------------|---------|
 | **presentation** | UI на Jetpack Compose, состояние экранов | `ImagesScreen`, `ImageDetailScreen`, `ImagesViewModel` |
-| **domain** | Бизнес-правила, абстракции (ports) | `ObserveImagesGridUseCase`, `LoadCachedOriginalUseCase`, `ImagesListRepository` |
+| **domain** | Бизнес-правила, абстракции (ports) | `ObserveImagesGridUseCase`, `LoadCachedOriginalFileUseCase`, `ImagesListRepository` |
 | **data** | Реализации портов, сеть, файлы | `ImagesListRepositoryImpl`, `OriginalImageCacheRepositoryImpl`, `ImageBytesDownloader` |
 | **di** | Hilt-модули, `@IoDispatcher` | `RepositoryModule`, `NetworkModule`, `DispatcherModule` |
 
