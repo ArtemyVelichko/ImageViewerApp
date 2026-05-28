@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -21,11 +22,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.imagesobserver.R
 import com.example.imagesobserver.domain.model.GridThumbnailResult
@@ -51,11 +50,6 @@ fun ImagesScreen(
     val openableUrls by viewModel.openableUrls.collectAsStateWithLifecycle()
     val brokenUrls by viewModel.brokenUrls.collectAsStateWithLifecycle()
 
-    LifecycleResumeEffect(Unit) {
-        viewModel.syncBrokenUrlsFromRepository()
-        onPauseOrDispose { }
-    }
-
     ImagesScreenContent(
         state = state,
         openableUrls = openableUrls,
@@ -64,7 +58,8 @@ fun ImagesScreen(
         onOpenImageDetail = onOpenImageDetail,
         loadGridThumbnail = viewModel::loadGridThumbnail,
         peekGridThumbnail = viewModel::peekGridThumbnail,
-        onGridLayoutChanged = viewModel::updateGridLayout,
+        onGridContentWidthChanged = viewModel::onGridContentWidthChanged,
+        onGridViewportChanged = viewModel::onGridViewportChanged,
         openDetailFromGrid = viewModel::openDetailFromGrid,
         onRetryGridThumbnail = viewModel::onRetryGridThumbnail,
     )
@@ -78,9 +73,10 @@ fun ImagesScreenContent(
     onOpenImageDetail: (Int) -> Unit,
     loadGridThumbnail: suspend (ImageUrl, Int, Int) -> File?,
     peekGridThumbnail: (ImageUrl, Int, Int) -> GridThumbnailResult?,
-    onGridLayoutChanged: (contentWidthDp: Float, cellSpacingDp: Float) -> Unit,
+    onGridContentWidthChanged: (gridWidthPx: Int) -> Unit,
+    onGridViewportChanged: (visibleRowIndices: List<Int>) -> Unit,
     openDetailFromGrid: (ImageUrl) -> Int?,
-    onRetryGridThumbnail: (ImageUrl) -> Unit,
+    onRetryGridThumbnail: (ImageUrl, Int, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -111,8 +107,6 @@ fun ImagesScreenContent(
             }
 
             else -> {
-                val density = LocalDensity.current
-                val spacingDp = Dimens.imageGridCellSpacing.value
                 var gridWidthPx by remember { mutableIntStateOf(0) }
                 Box(
                     modifier = Modifier
@@ -120,14 +114,22 @@ fun ImagesScreenContent(
                         .padding(horizontal = Dimens.imageGridHorizontalMargin)
                         .onSizeChanged { gridWidthPx = it.width },
                 ) {
-                    LaunchedEffect(gridWidthPx, spacingDp, density) {
+                    LaunchedEffect(gridWidthPx) {
                         if (gridWidthPx > 0) {
-                            val contentWidthDp = with(density) { gridWidthPx.toDp().value }
-                            onGridLayoutChanged(contentWidthDp, spacingDp)
+                            onGridContentWidthChanged(gridWidthPx)
                         }
                     }
                     val columns = state.gridColumnCount.coerceAtLeast(1)
+                    val gridState = rememberLazyGridState()
+                    val visibleItemsSignature = gridState.layoutInfo.visibleItemsInfo
+                        .joinToString(separator = ",") { "${it.index}" }
+                    LaunchedEffect(visibleItemsSignature) {
+                        onGridViewportChanged(
+                            gridState.layoutInfo.visibleItemsInfo.map { it.index },
+                        )
+                    }
                     LazyVerticalGrid(
+                        state = gridState,
                         columns = GridCells.Fixed(columns),
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(vertical = Dimens.imageGridContentPaddingVertical),
@@ -178,7 +180,7 @@ fun ImagesScreenContent(
     }
 }
 
-private val previewOnRetryGridThumbnail: (ImageUrl) -> Unit = {}
+private val previewOnRetryGridThumbnail: (ImageUrl, Int, Int) -> Unit = { _, _, _ -> }
 
 private val previewLoadGridThumbnail: suspend (ImageUrl, Int, Int) -> File? = { _, _, _ -> null }
 
@@ -210,7 +212,8 @@ private fun ImagesScreenGridPreview() {
             onOpenImageDetail = {},
             loadGridThumbnail = previewLoadGridThumbnail,
             peekGridThumbnail = previewPeekGridThumbnail,
-            onGridLayoutChanged = { _, _ -> },
+            onGridContentWidthChanged = {},
+            onGridViewportChanged = {},
             openDetailFromGrid = previewOpenDetailFromGrid,
             onRetryGridThumbnail = previewOnRetryGridThumbnail,
         )
@@ -228,7 +231,8 @@ private fun ImagesScreenLoadingPreview() {
             onOpenImageDetail = {},
             loadGridThumbnail = previewLoadGridThumbnail,
             peekGridThumbnail = previewPeekGridThumbnail,
-            onGridLayoutChanged = { _, _ -> },
+            onGridContentWidthChanged = {},
+            onGridViewportChanged = {},
             openDetailFromGrid = previewOpenDetailFromGrid,
             onRetryGridThumbnail = previewOnRetryGridThumbnail,
         )
@@ -249,7 +253,8 @@ private fun ImagesScreenErrorPreview() {
             onOpenImageDetail = {},
             loadGridThumbnail = previewLoadGridThumbnail,
             peekGridThumbnail = previewPeekGridThumbnail,
-            onGridLayoutChanged = { _, _ -> },
+            onGridContentWidthChanged = {},
+            onGridViewportChanged = {},
             openDetailFromGrid = previewOpenDetailFromGrid,
             onRetryGridThumbnail = previewOnRetryGridThumbnail,
         )

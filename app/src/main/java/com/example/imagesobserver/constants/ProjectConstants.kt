@@ -35,6 +35,9 @@ object ProjectConstants {
     /** Max grid thumbnail resolve results kept in [GridThumbnailMemoryCache]. */
     const val GRID_THUMBNAIL_MEMORY_CACHE_MAX_ENTRIES = 300
 
+    /** Max concurrent image downloads during background gallery prefetch. */
+    const val IMAGE_GALLERY_PREFETCH_MAX_CONCURRENCY = 32
+
     /** Multiplier applied to one-finger pan delta on the zoomed detail image. */
     const val IMAGE_PAN_DRAG_SENSITIVITY = 4f
 

@@ -42,7 +42,7 @@ fun GridThumbnailCoilImage(
     loadGridThumbnail: suspend (ImageUrl, Int, Int) -> File?,
     peekGridThumbnail: (ImageUrl, Int, Int) -> GridThumbnailResult?,
     isPermanentlyBroken: Boolean,
-    onRetryGridThumbnail: (ImageUrl) -> Unit,
+    onRetryGridThumbnail: (ImageUrl, Int, Int) -> Unit,
     onClick: (() -> Unit)?,
     targetWidthPx: Int,
     targetHeightPx: Int,
@@ -74,7 +74,7 @@ fun GridThumbnailCoilImage(
     }
 
     val onRetry: () -> Unit = {
-        onRetryGridThumbnail(imageUrl)
+        onRetryGridThumbnail(imageUrl, targetWidthPx, targetHeightPx)
         reloadAttempt++
     }
 

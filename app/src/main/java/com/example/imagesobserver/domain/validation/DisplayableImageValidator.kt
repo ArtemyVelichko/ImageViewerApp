@@ -7,6 +7,8 @@ import java.io.File
 interface DisplayableImageValidator {
 
     suspend fun isDisplayable(file: File): Boolean
+
+    suspend fun isDisplayable(bytes: ByteArray): Boolean
 }
 
 suspend fun DisplayableImageValidator.resolveDisplayable(file: File?): DisplayableImageResult {

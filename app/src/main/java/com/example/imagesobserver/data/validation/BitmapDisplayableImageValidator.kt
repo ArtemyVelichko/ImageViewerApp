@@ -17,4 +17,8 @@ class BitmapDisplayableImageValidator @Inject constructor(
     override suspend fun isDisplayable(file: File): Boolean = withContext(ioDispatcher) {
         file.isBitmapValid()
     }
+
+    override suspend fun isDisplayable(bytes: ByteArray): Boolean = withContext(ioDispatcher) {
+        bytes.isBitmapValid()
+    }
 }

@@ -1,19 +1,14 @@
 package com.example.imagesobserver.presentation.detail
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
-import com.example.imagesobserver.domain.model.DisplayableImageResult
-import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.domain.repository.ImageGalleryRepository
+import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.domain.sharing.ImageUrlShareGateway
 import com.example.imagesobserver.domain.usecase.LoadCachedOriginalUseCase
-import com.example.imagesobserver.domain.validation.DisplayableImageValidator
-import com.example.imagesobserver.domain.validation.resolveDisplayable
 import com.example.imagesobserver.presentation.detail.model.DetailPagerState
 import com.example.imagesobserver.presentation.detail.model.InitialPageIndex
 import com.example.imagesobserver.presentation.detail.model.SettledPageIndex
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,9 +20,7 @@ import kotlinx.coroutines.flow.update
 class ImageDetailViewModel @Inject constructor(
     private val imageGalleryRepository: ImageGalleryRepository,
     private val loadCachedOriginalUseCase: LoadCachedOriginalUseCase,
-    private val displayableImageValidator: DisplayableImageValidator,
     private val imageUrlShareGateway: ImageUrlShareGateway,
-    @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     private val _pagerState = MutableStateFlow(DetailPagerState())
@@ -55,41 +48,14 @@ class ImageDetailViewModel @Inject constructor(
     }
 
     suspend fun loadCachedOriginal(imageUrl: ImageUrl): File? =
-        when (
-            val result = displayableImageValidator.resolveDisplayable(
-                loadCachedOriginalUseCase(imageUrl),
-            )
-        ) {
-            is DisplayableImageResult.Displayable -> result.file
-            DisplayableImageResult.NotDisplayable -> {
-                imageGalleryRepository.markBroken(imageUrl)
-                applyUrlsFromRepository()
-                null
-            }
-        }
+        loadCachedOriginalUseCase(imageUrl)
 
     fun shareCurrentImageUrl() {
-        _pagerState.value.visibleUrl?.let { url ->
-            appContext.startActivity(imageUrlShareGateway.buildShareChooserIntent(url))
-        }
+        _pagerState.value.visibleUrl?.let(imageUrlShareGateway::shareImage)
     }
 
     fun openCurrentImageInBrowser() {
-        _pagerState.value.visibleUrl?.let { url ->
-            appContext.startActivity(imageUrlShareGateway.buildViewInBrowserIntent(url))
-        }
-    }
-
-    private fun applyUrlsFromRepository() {
-        val list = imageGalleryRepository.getUrls()
-        if (list == _pagerState.value.urls) return
-        val anchor = _pagerState.value.visibleUrl
-        val settled = resolveSettledPageIndex(list, anchor, _pagerState.value.settledPageIndex)
-        setPagerState(
-            urls = list,
-            settledPageIndex = settled,
-            visibleUrl = list.getOrNull(settled.index),
-        )
+        _pagerState.value.visibleUrl?.let(imageUrlShareGateway::openImageInBrowser)
     }
 
     private fun setPagerState(
@@ -114,19 +80,6 @@ class ImageDetailViewModel @Inject constructor(
                 },
             )
         }
-    }
-
-    private fun resolveSettledPageIndex(
-        urls: List<ImageUrl>,
-        anchor: ImageUrl?,
-        fallbackIndex: SettledPageIndex,
-    ): SettledPageIndex {
-        if (urls.isEmpty()) return SettledPageIndex(0)
-        anchor?.let { url ->
-            val index = urls.indexOfFirst { it.url == url.url }
-            if (index >= 0) return SettledPageIndex(index)
-        }
-        return fallbackIndex.coerceIn(0, urls.lastIndex)
     }
 
     private fun pageIndexFor(urls: List<ImageUrl>, index: Int): Int =

@@ -1,19 +1,15 @@
 package com.example.imagesobserver.presentation.detail
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
@@ -24,10 +20,9 @@ import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import com.example.imagesobserver.R
 import com.example.imagesobserver.domain.model.ImageUrl
-import com.example.imagesobserver.presentation.theme.Dimens
 import java.io.File
 
-/** Full-screen detail image; reload is handled on the grid, not here. */
+/** Full-screen detail image from disk cache only; reload is handled on the grid, not here. */
 @Composable
 fun DetailFullscreenCoilImage(
     imageUrl: ImageUrl,
@@ -38,69 +33,66 @@ fun DetailFullscreenCoilImage(
 ) {
     val context = LocalContext.current
     val placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
-    var model by remember(imageUrl) { mutableStateOf<Any?>(null) }
+    var cachedFile by remember(imageUrl) { mutableStateOf<File?>(null) }
 
     LaunchedEffect(imageUrl, loadCachedOriginal) {
-        model = loadCachedOriginal(imageUrl) ?: imageUrl.url
+        cachedFile = loadCachedOriginal(imageUrl)
     }
 
     Box(modifier = modifier) {
-        when (val data = model) {
-            null -> {
-                Image(
-                    painter = placeholder,
-                    contentDescription = null,
-                    modifier = imageModifier,
+        val file = cachedFile
+        if (file == null) {
+            DetailImagePlaceholder(
+                placeholder = placeholder,
+                modifier = imageModifier,
+                contentScale = contentScale,
+            )
+            return@Box
+        }
+
+        val request = remember(file) {
+            ImageRequest.Builder(context)
+                .data(file)
+                .build()
+        }
+        SubcomposeAsyncImage(
+            model = request,
+            contentDescription = stringResource(R.string.content_description_image),
+            modifier = imageModifier,
+            loading = {
+                DetailImagePlaceholder(
+                    placeholder = placeholder,
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = contentScale,
                 )
-            }
-
-            else -> {
-                val request = remember(data) {
-                    ImageRequest.Builder(context)
-                        .data(data)
-                        .crossfade(data !is File)
-                        .build()
-                }
-                SubcomposeAsyncImage(
-                    model = request,
-                    contentDescription = stringResource(R.string.content_description_image),
-                    modifier = imageModifier,
-                    loading = {
-                        Image(
-                            painter = placeholder,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = contentScale,
-                        )
-                    },
-                    error = {
-                        ImageLoadFailedContent(modifier = Modifier.fillMaxSize())
-                    },
-                    success = {
-                        SubcomposeAsyncImageContent(
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = contentScale,
-                        )
-                    },
+            },
+            error = {
+                DetailImagePlaceholder(
+                    placeholder = placeholder,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = contentScale,
                 )
-            }
-        }
+            },
+            success = {
+                SubcomposeAsyncImageContent(
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = contentScale,
+                )
+            },
+        )
     }
 }
 
 @Composable
-private fun ImageLoadFailedContent(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = stringResource(R.string.image_load_failed),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(Dimens.imagesListErrorScreenPadding),
-        )
-    }
+private fun DetailImagePlaceholder(
+    placeholder: ColorPainter,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Fit,
+) {
+    Image(
+        painter = placeholder,
+        contentDescription = null,
+        modifier = modifier,
+        contentScale = contentScale,
+    )
 }

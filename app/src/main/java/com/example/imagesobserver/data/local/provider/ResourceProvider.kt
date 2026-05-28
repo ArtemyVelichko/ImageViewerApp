@@ -20,4 +20,9 @@ interface ResourceProvider {
     fun getString(@StringRes resId: Int): String
 
     fun getString(@StringRes resId: Int, vararg formatArgs: Any): String
+
+    /** Screen density for converting [androidx.compose.ui.unit.Dp] layout values to pixels. */
+    fun displayDensity(): Float
+
+    fun dpToPx(dp: Float): Int
 }

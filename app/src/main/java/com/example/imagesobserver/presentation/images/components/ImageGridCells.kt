@@ -45,7 +45,7 @@ fun ImageThumbnailCell(
     loadGridThumbnail: suspend (ImageUrl, Int, Int) -> File?,
     peekGridThumbnail: (ImageUrl, Int, Int) -> GridThumbnailResult?,
     isPermanentlyBroken: Boolean,
-    onRetryGridThumbnail: (ImageUrl) -> Unit,
+    onRetryGridThumbnail: (ImageUrl, Int, Int) -> Unit,
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {

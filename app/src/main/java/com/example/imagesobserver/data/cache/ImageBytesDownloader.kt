@@ -9,7 +9,6 @@ import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.delay
 
 /** Downloads raw image bytes for a manifest URL. */
 @Singleton

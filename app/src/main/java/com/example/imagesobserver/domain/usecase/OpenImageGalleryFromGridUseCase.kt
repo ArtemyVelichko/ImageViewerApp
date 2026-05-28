@@ -11,14 +11,13 @@ class OpenImageGalleryFromGridUseCase @Inject constructor(
 ) {
 
     /**
-     * @param openableUrls URLs with a loaded, valid grid thumbnail — [clicked] must be among them.
      * @return Pager start index, or null when detail must not open.
      */
     operator fun invoke(
         clicked: ImageUrl,
         items: List<ManifestGridRow>,
-        openableUrls: Set<String>,
     ): Int? {
+        val openableUrls = imageGalleryRepository.getOpenableUrls()
         if (clicked.url !in openableUrls) return null
         val brokenUrls = imageGalleryRepository.getBrokenUrls()
         val pagerUrls = items.mapNotNull { row ->
@@ -26,7 +25,7 @@ class OpenImageGalleryFromGridUseCase @Inject constructor(
                 is ManifestGridRow.Link -> row.url
                 is ManifestGridRow.InvalidLine -> null
             }
-        }.filter { it.url !in brokenUrls }
+        }.filter { it.url !in brokenUrls && it.url in openableUrls }
         if (clicked !in pagerUrls) return null
         imageGalleryRepository.setUrls(pagerUrls)
         return pagerUrls.indexOf(clicked)
