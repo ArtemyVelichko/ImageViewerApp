@@ -28,26 +28,38 @@ import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import com.example.imagesobserver.R
 import com.example.imagesobserver.domain.model.GridThumbnailResult
+import com.example.imagesobserver.domain.model.ImageGalleryUrlStatus
 import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.presentation.theme.Dimens
 import java.io.File
 
 /**
  * Grid cell image for [com.example.imagesobserver.presentation.images.ImagesScreen] only.
- * Failed downloads show Retry; permanently invalid bitmaps show «—».
+ * [ImageGalleryUrlStatus.Broken] shows placeholder; loading/openable show thumbnail flow.
  */
 @Composable
 fun GridThumbnailCoilImage(
     imageUrl: ImageUrl,
     loadGridThumbnail: suspend (ImageUrl, Int, Int) -> File?,
     peekGridThumbnail: (ImageUrl, Int, Int) -> GridThumbnailResult?,
-    isPermanentlyBroken: Boolean,
+    urlStatus: ImageGalleryUrlStatus,
     onRetryGridThumbnail: (ImageUrl, Int, Int) -> Unit,
     onClick: (() -> Unit)?,
     targetWidthPx: Int,
     targetHeightPx: Int,
     modifier: Modifier = Modifier,
 ) {
+    if (urlStatus == ImageGalleryUrlStatus.Broken) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .alpha(0.72f),
+        ) {
+            ImageGridPlaceholderCell(modifier = Modifier.fillMaxSize())
+        }
+        return
+    }
+
     val context = LocalContext.current
     val cachedEntry = remember(imageUrl, targetWidthPx, targetHeightPx) {
         peekGridThumbnail(imageUrl, targetWidthPx, targetHeightPx)
@@ -69,7 +81,7 @@ fun GridThumbnailCoilImage(
     }
 
     LaunchedEffect(imageUrl, targetWidthPx, targetHeightPx, loadGridThumbnail, reloadAttempt) {
-        if (reloadAttempt == 0 && cachedEntry != null) return@LaunchedEffect
+        if (reloadAttempt == 0 && cachedEntry is GridThumbnailResult.Displayable) return@LaunchedEffect
         loadThumbnail()
     }
 
@@ -148,10 +160,6 @@ fun GridThumbnailCoilImage(
                         )
                     }
                 }
-            }
-
-            isPermanentlyBroken -> {
-                ImageGridPlaceholderCell(modifier = Modifier.fillMaxSize())
             }
 
             else -> {

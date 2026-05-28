@@ -28,6 +28,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.imagesobserver.R
 import com.example.imagesobserver.domain.model.GridThumbnailResult
+import com.example.imagesobserver.domain.model.ImageGalleryLoadState
+import com.example.imagesobserver.domain.model.ImageGalleryUrlStatus
 import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.domain.model.ManifestGridRow
 import com.example.imagesobserver.presentation.images.components.ImageGridPlaceholderCell
@@ -36,9 +38,7 @@ import com.example.imagesobserver.presentation.images.model.ImagesUiState
 import com.example.imagesobserver.presentation.theme.Dimens
 import com.example.imagesobserver.presentation.theme.ImagesObserverTheme
 import java.io.File
-import kotlinx.collections.immutable.PersistentSet
 import kotlinx.collections.immutable.persistentListOf
-import kotlinx.collections.immutable.persistentSetOf
 
 @Composable
 fun ImagesScreen(
@@ -47,13 +47,11 @@ fun ImagesScreen(
     viewModel: ImagesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val openableUrls by viewModel.openableUrls.collectAsStateWithLifecycle()
-    val brokenUrls by viewModel.brokenUrls.collectAsStateWithLifecycle()
+    val galleryLoadState by viewModel.galleryLoadState.collectAsStateWithLifecycle()
 
     ImagesScreenContent(
         state = state,
-        openableUrls = openableUrls,
-        brokenUrls = brokenUrls,
+        galleryLoadState = galleryLoadState,
         modifier = modifier,
         onOpenImageDetail = onOpenImageDetail,
         loadGridThumbnail = viewModel::loadGridThumbnail,
@@ -68,8 +66,7 @@ fun ImagesScreen(
 @Composable
 fun ImagesScreenContent(
     state: ImagesUiState,
-    openableUrls: PersistentSet<String>,
-    brokenUrls: PersistentSet<String>,
+    galleryLoadState: ImageGalleryLoadState,
     onOpenImageDetail: (Int) -> Unit,
     loadGridThumbnail: suspend (ImageUrl, Int, Int) -> File?,
     peekGridThumbnail: (ImageUrl, Int, Int) -> GridThumbnailResult?,
@@ -146,14 +143,15 @@ fun ImagesScreenContent(
                             },
                         ) { _, row ->
                             when (row) {
-                                is ManifestGridRow.Link ->
+                                is ManifestGridRow.Link -> {
+                                    val urlStatus = galleryLoadState.status(row.url.url)
                                     ImageThumbnailCell(
                                         imageUrl = row.url,
                                         loadGridThumbnail = loadGridThumbnail,
                                         peekGridThumbnail = peekGridThumbnail,
-                                        isPermanentlyBroken = row.url.url in brokenUrls,
+                                        urlStatus = urlStatus,
                                         onRetryGridThumbnail = onRetryGridThumbnail,
-                                        onClick = if (row.url.url in openableUrls) {
+                                        onClick = if (urlStatus == ImageGalleryUrlStatus.Openable) {
                                             {
                                                 openDetailFromGrid(row.url)?.let(onOpenImageDetail)
                                             }
@@ -161,6 +159,7 @@ fun ImagesScreenContent(
                                             null
                                         },
                                     )
+                                }
 
                                 is ManifestGridRow.InvalidLine ->
                                     ImageGridPlaceholderCell()
@@ -207,8 +206,11 @@ private fun ImagesScreenGridPreview() {
                 gridColumnCount = 3,
                 isLoading = false,
             ),
-            openableUrls = persistentSetOf("https://it-link.ru/images/1.jpg"),
-            brokenUrls = persistentSetOf(),
+            galleryLoadState = ImageGalleryLoadState(
+                urlStatuses = mapOf(
+                    "https://it-link.ru/images/1.jpg" to ImageGalleryUrlStatus.Openable,
+                ),
+            ),
             onOpenImageDetail = {},
             loadGridThumbnail = previewLoadGridThumbnail,
             peekGridThumbnail = previewPeekGridThumbnail,
@@ -226,8 +228,7 @@ private fun ImagesScreenLoadingPreview() {
     ImagesObserverTheme(dynamicColor = false) {
         ImagesScreenContent(
             state = ImagesUiState(isLoading = true),
-            openableUrls = persistentSetOf(),
-            brokenUrls = persistentSetOf(),
+            galleryLoadState = ImageGalleryLoadState(),
             onOpenImageDetail = {},
             loadGridThumbnail = previewLoadGridThumbnail,
             peekGridThumbnail = previewPeekGridThumbnail,
@@ -248,8 +249,7 @@ private fun ImagesScreenErrorPreview() {
                 isLoading = false,
                 error = "Images list is missing in cache and remote refresh failed",
             ),
-            openableUrls = persistentSetOf(),
-            brokenUrls = persistentSetOf(),
+            galleryLoadState = ImageGalleryLoadState(),
             onOpenImageDetail = {},
             loadGridThumbnail = previewLoadGridThumbnail,
             peekGridThumbnail = previewPeekGridThumbnail,

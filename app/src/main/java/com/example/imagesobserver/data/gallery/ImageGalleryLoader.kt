@@ -2,6 +2,7 @@ package com.example.imagesobserver.data.gallery
 
 import com.example.imagesobserver.constants.ProjectConstants
 import com.example.imagesobserver.domain.model.GridThumbnailResult
+import com.example.imagesobserver.domain.model.ImageGalleryUrlStatus
 import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.domain.model.ManifestGridRow
 import com.example.imagesobserver.domain.repository.ImageGalleryRepository
@@ -74,8 +75,24 @@ class ImageGalleryLoader @Inject constructor(
     }
 
     suspend fun loadThumbnail(imageUrl: ImageUrl, widthPx: Int, heightPx: Int): File? {
-        if (imageUrl.url in imageGalleryRepository.getBrokenUrls()) return null
+        if (imageGalleryRepository.getUrlStatus(imageUrl) == ImageGalleryUrlStatus.Broken) return null
+        when (resolveGridThumbnailUseCase.peek(imageUrl, widthPx, heightPx)) {
+            GridThumbnailResult.Invalid -> {
+                imageGalleryRepository.markBroken(imageUrl)
+                return null
+            }
+            is GridThumbnailResult.Displayable -> {
+                if (imageGalleryRepository.getUrlStatus(imageUrl) == ImageGalleryUrlStatus.Loading) {
+                    imageGalleryRepository.markOpenable(imageUrl)
+                }
+                return displayableFile(imageUrl, widthPx, heightPx)
+            }
+            GridThumbnailResult.LoadFailed, null -> Unit
+        }
         if (isAlreadyDisplayable(imageUrl, widthPx, heightPx)) {
+            if (imageGalleryRepository.getUrlStatus(imageUrl) == ImageGalleryUrlStatus.Loading) {
+                imageGalleryRepository.markOpenable(imageUrl)
+            }
             return displayableFile(imageUrl, widthPx, heightPx)
         }
         val mutex = loadMutexes.computeIfAbsent(jobKey(imageUrl, widthPx, heightPx)) { Mutex() }
@@ -92,11 +109,15 @@ class ImageGalleryLoader @Inject constructor(
 
     fun retry(imageUrl: ImageUrl, widthPx: Int, heightPx: Int) {
         resolveGridThumbnailUseCase.evict(imageUrl)
-        imageGalleryRepository.unmarkBroken(imageUrl)
-        imageGalleryRepository.unmarkOpenable(imageUrl)
+        imageGalleryRepository.markLoading(imageUrl)
         applicationScope.launch {
             loadThumbnail(imageUrl, widthPx, heightPx)
         }
+    }
+
+    fun getGridThumbnailTargetPx(): Pair<Int, Int>? = synchronized(sessionLock) {
+        if (thumbnailTargetWidthPx <= 0 || thumbnailTargetHeightPx <= 0) return null
+        thumbnailTargetWidthPx to thumbnailTargetHeightPx
     }
 
     fun cancelAll() {
@@ -145,7 +166,9 @@ class ImageGalleryLoader @Inject constructor(
                 async {
                     semaphore.withPermit {
                         if (!isActive) return@async
-                        if (imageUrl.url in imageGalleryRepository.getBrokenUrls()) return@async
+                        if (imageGalleryRepository.getUrlStatus(imageUrl) == ImageGalleryUrlStatus.Broken) {
+                            return@async
+                        }
                         if (isAlreadyDisplayable(imageUrl, widthPx, heightPx)) return@async
                         loadThumbnail(imageUrl, widthPx, heightPx)
                     }
@@ -195,11 +218,10 @@ class ImageGalleryLoader @Inject constructor(
                 result.file
             }
             GridThumbnailResult.LoadFailed -> {
-                imageGalleryRepository.unmarkOpenable(imageUrl)
+                imageGalleryRepository.markLoading(imageUrl)
                 null
             }
             GridThumbnailResult.Invalid -> {
-                imageGalleryRepository.unmarkOpenable(imageUrl)
                 imageGalleryRepository.markBroken(imageUrl)
                 null
             }

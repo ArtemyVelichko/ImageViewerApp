@@ -10,19 +10,17 @@ import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.domain.model.ManifestGridRow
 import com.example.imagesobserver.domain.repository.ImageGalleryRepository
 import com.example.imagesobserver.domain.usecase.ObserveImagesGridUseCase
+import com.example.imagesobserver.domain.model.manifestLinks
 import com.example.imagesobserver.domain.usecase.OpenImageGalleryFromGridUseCase
 import com.example.imagesobserver.domain.usecase.ResetGridOnManifestRefreshUseCase
 import com.example.imagesobserver.domain.usecase.ResolveGridThumbnailUseCase
 import com.example.imagesobserver.presentation.images.model.ImagesUiState
 import com.example.imagesobserver.presentation.theme.Dimens
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.collections.immutable.PersistentSet
-import kotlinx.collections.immutable.persistentSetOf
+import com.example.imagesobserver.domain.model.ImageGalleryLoadState
 import kotlinx.collections.immutable.toImmutableList
-import kotlinx.collections.immutable.toPersistentSet
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -45,13 +43,8 @@ class ImagesViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ImagesUiState())
     val uiState: StateFlow<ImagesUiState> = _uiState.asStateFlow()
 
-    val openableUrls: StateFlow<PersistentSet<String>> = imageGalleryRepository.loadState
-        .map { it.openableUrls.toPersistentSet() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), persistentSetOf())
-
-    val brokenUrls: StateFlow<PersistentSet<String>> = imageGalleryRepository.loadState
-        .map { it.brokenUrls.toPersistentSet() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), persistentSetOf())
+    val galleryLoadState: StateFlow<ImageGalleryLoadState> = imageGalleryRepository.loadState
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ImageGalleryLoadState())
 
     init {
         viewModelScope.launch {
@@ -133,14 +126,12 @@ class ImagesViewModel @Inject constructor(
         imageGalleryLoader.retry(imageUrl, widthPx, heightPx)
     }
 
-    fun openDetailFromGrid(clicked: ImageUrl): Int? =
-        openImageGalleryFromGridUseCase(
-            clicked = clicked,
-            items = _uiState.value.items,
-        )
+    fun openDetailFromGrid(clicked: ImageUrl): Int? {
+        imageGalleryRepository.setManifestLinks(_uiState.value.items.manifestLinks())
+        return openImageGalleryFromGridUseCase(clicked)
+    }
 
     private fun onManifestRefreshed() {
-        imageGalleryLoader.cancelAll()
         resetGridOnManifestRefreshUseCase()
     }
 

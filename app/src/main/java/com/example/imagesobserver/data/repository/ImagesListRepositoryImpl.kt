@@ -21,7 +21,6 @@ class ImagesListRepositoryImpl @Inject constructor(
 ) : ImagesListRepository {
 
     override suspend fun fetchRemoteList(): String = withContext(ioDispatcher) {
-        delay(1000)
         smartRetry(appErrorFactory) {
             imagesRetrofit.imagesManifestApi.downloadManifestFile()
         }
