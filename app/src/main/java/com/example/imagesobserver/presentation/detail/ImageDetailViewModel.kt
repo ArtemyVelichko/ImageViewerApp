@@ -5,11 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.imagesobserver.domain.model.ImageGalleryLoadState
 import com.example.imagesobserver.domain.model.ImageGalleryUrlStatus
 import com.example.imagesobserver.domain.model.ImageUrl
-import com.example.imagesobserver.domain.model.detailPagerUrls
 import com.example.imagesobserver.domain.repository.ImageGalleryRepository
 import com.example.imagesobserver.domain.sharing.ImageUrlShareGateway
 import com.example.imagesobserver.domain.usecase.LoadCachedOriginalUseCase
-import com.example.imagesobserver.domain.usecase.LoadDetailPageUseCase
 import com.example.imagesobserver.presentation.detail.model.DetailPagerState
 import com.example.imagesobserver.presentation.detail.model.InitialPageIndex
 import com.example.imagesobserver.presentation.detail.model.SettledPageIndex
@@ -26,7 +24,6 @@ import kotlinx.coroutines.launch
 class ImageDetailViewModel @Inject constructor(
     private val imageGalleryRepository: ImageGalleryRepository,
     private val loadCachedOriginalUseCase: LoadCachedOriginalUseCase,
-    private val loadDetailPageUseCase: LoadDetailPageUseCase,
     private val imageUrlShareGateway: ImageUrlShareGateway,
 ) : ViewModel() {
 
@@ -34,6 +31,7 @@ class ImageDetailViewModel @Inject constructor(
     val pagerState: StateFlow<DetailPagerState> = _pagerState.asStateFlow()
 
     private var detailSessionStarted = false
+    private var manifestStartIndex: Int = 0
 
     init {
         viewModelScope.launch {
@@ -43,42 +41,19 @@ class ImageDetailViewModel @Inject constructor(
 
     fun load(manifestStartIndex: Int) {
         detailSessionStarted = true
-        val manifest = imageGalleryRepository.getManifestLinks()
-        val loadState = imageGalleryRepository.loadState.value
-        val pagerUrls = manifest.detailPagerUrls(loadState)
-        val startUrl = manifest.getOrNull(manifestStartIndex)
-        val pageIndex = startUrl?.let { url ->
-            pagerUrls.indexOfFirst { it.url == url.url }.takeIf { it >= 0 }
-        } ?: pageIndexFor(pagerUrls, manifestStartIndex)
-        setPagerState(
-            urls = pagerUrls,
-            urlStatuses = loadState.urlStatuses,
-            initialPageIndex = InitialPageIndex(pageIndex),
-            settledPageIndex = SettledPageIndex(pageIndex),
-            visibleUrl = pagerUrls.getOrNull(pageIndex),
-        )
+        this.manifestStartIndex = manifestStartIndex
+        applyLoadState(imageGalleryRepository.loadState.value, isInitialLoad = true)
     }
 
     fun onPageSettled(pageIndex: Int) {
-        val list = _pagerState.value.urls
-        if (list.isEmpty()) return
-        val page = pageIndex.coerceIn(0, list.lastIndex)
-        val url = list[page]
-        if (imageGalleryRepository.getUrlStatus(url) == ImageGalleryUrlStatus.Broken) return
-        setPagerState(
-            settledPageIndex = SettledPageIndex(page),
-            visibleUrl = url,
-        )
-        if (imageGalleryRepository.getUrlStatus(url) == ImageGalleryUrlStatus.Loading) {
-            loadPage(url)
-        }
-    }
-
-    fun loadPage(imageUrl: ImageUrl) {
-        if (imageGalleryRepository.getUrlStatus(imageUrl) == ImageGalleryUrlStatus.Broken) return
-        if (_pagerState.value.urls.none { it.url == imageUrl.url }) return
-        viewModelScope.launch {
-            loadDetailPageUseCase(imageUrl)
+        val pages = _pagerState.value.pages
+        if (pages.isEmpty()) return
+        val settled = pageIndex.coerceIn(0, pages.lastIndex)
+        _pagerState.update {
+            it.copy(
+                settledPageIndex = SettledPageIndex(settled),
+                visibleUrl = pages[settled],
+            )
         }
     }
 
@@ -95,70 +70,42 @@ class ImageDetailViewModel @Inject constructor(
         _pagerState.value.visibleUrl?.let(imageUrlShareGateway::openImageInBrowser)
     }
 
-    private fun applyLoadState(loadState: ImageGalleryLoadState) {
+    private fun applyLoadState(loadState: ImageGalleryLoadState, isInitialLoad: Boolean = false) {
         _pagerState.update { current ->
-            if (!detailSessionStarted && current.urls.isEmpty()) {
-                return@update current.copy(urlStatuses = loadState.urlStatuses)
+            if (!detailSessionStarted && current.pages.isEmpty()) return@update current
+
+            val openablePages = imageGalleryRepository.getOpenableManifestLinks()
+            if (openablePages.isEmpty()) {
+                return@update current.copy(pages = emptyList(), visibleUrl = null)
             }
 
-            val manifest = imageGalleryRepository.getManifestLinks()
-            if (manifest.isEmpty()) {
-                return@update current.copy(urlStatuses = loadState.urlStatuses)
-            }
-
-            val nextUrls = manifest.detailPagerUrls(loadState)
-            if (nextUrls.isEmpty()) {
-                return@update current.copy(
-                    urlStatuses = loadState.urlStatuses,
-                    urls = emptyList(),
-                    visibleUrl = null,
-                )
-            }
-
-            val anchor = current.visibleUrl?.takeUnless { loadState.isBroken(it.url) }
             val pageIndex = when {
-                anchor != null -> nextUrls.indexOfFirst { it.url == anchor.url }.takeIf { it >= 0 }
-                else -> null
-            } ?: current.settledPageIndex.index.coerceIn(0, nextUrls.lastIndex)
-
-            current.copy(
-                urlStatuses = loadState.urlStatuses,
-                urls = nextUrls,
-                settledPageIndex = SettledPageIndex(pageIndex),
-                visibleUrl = nextUrls.getOrNull(pageIndex),
-            )
-        }
-    }
-
-    private fun setPagerState(
-        urls: List<ImageUrl>? = null,
-        urlStatuses: Map<String, ImageGalleryUrlStatus>? = null,
-        initialPageIndex: InitialPageIndex? = null,
-        settledPageIndex: SettledPageIndex? = null,
-        visibleUrl: ImageUrl? = null,
-    ) {
-        _pagerState.update { current ->
-            val loadState = urlStatuses?.let(::ImageGalleryLoadState)
-                ?: ImageGalleryLoadState(current.urlStatuses)
-            val nextUrls = (urls ?: current.urls).detailPagerUrls(loadState)
-            val maxIndex = nextUrls.lastIndex.coerceAtLeast(0)
-            val nextSettled = settledPageIndex
-                ?: current.settledPageIndex.coerceIn(0, maxIndex)
-            val nextVisible = when {
-                nextUrls.isEmpty() -> null
-                visibleUrl != null && nextUrls.any { it.url == visibleUrl.url } -> visibleUrl
-                else -> nextUrls.getOrNull(nextSettled.index)
+                isInitialLoad -> resolveInitialPageIndex(openablePages)
+                else -> {
+                    val anchor = current.visibleUrl?.takeUnless { loadState.isBroken(it.url) }
+                    when {
+                        anchor != null -> openablePages.indexOfFirst { it.url == anchor.url }.takeIf { it >= 0 }
+                        else -> null
+                    } ?: current.settledPageIndex.index.coerceIn(0, openablePages.lastIndex)
+                }
             }
+
             current.copy(
-                urls = nextUrls,
-                urlStatuses = loadState.urlStatuses,
-                initialPageIndex = initialPageIndex ?: current.initialPageIndex,
-                settledPageIndex = if (nextUrls.isEmpty()) SettledPageIndex(0) else nextSettled,
-                visibleUrl = nextVisible,
+                pages = openablePages,
+                initialPageIndex = if (isInitialLoad) InitialPageIndex(pageIndex) else current.initialPageIndex,
+                settledPageIndex = SettledPageIndex(pageIndex),
+                visibleUrl = openablePages.getOrNull(pageIndex),
             )
         }
     }
 
-    private fun pageIndexFor(urls: List<ImageUrl>, index: Int): Int =
-        if (urls.isEmpty()) 0 else index.coerceIn(0, urls.lastIndex)
+    private fun resolveInitialPageIndex(openablePages: List<ImageUrl>): Int {
+        val manifest = imageGalleryRepository.getManifestLinks()
+        val startUrl = manifest.getOrNull(manifestStartIndex) ?: return 0
+        return openablePages.indexOfFirst { it.url == startUrl.url }.takeIf { it >= 0 }
+            ?: pageIndexFor(openablePages.size, manifestStartIndex)
+    }
+
+    private fun pageIndexFor(pageCount: Int, index: Int): Int =
+        if (pageCount == 0) 0 else index.coerceIn(0, pageCount - 1)
 }

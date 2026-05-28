@@ -30,6 +30,11 @@ class ImageGalleryRepositoryImpl @Inject constructor() : ImageGalleryRepository 
         manifestLinks.toList()
     }
 
+    override fun getOpenableManifestLinks(): List<ImageUrl> {
+        val loadState = _loadState.value
+        return getManifestLinks().filter { loadState.isOpenable(it.url) }
+    }
+
     override fun getUrlStatus(imageUrl: ImageUrl): ImageGalleryUrlStatus =
         _loadState.value.status(imageUrl.url)
 

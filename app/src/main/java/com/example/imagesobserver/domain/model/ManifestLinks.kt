@@ -7,7 +7,3 @@ fun List<ManifestGridRow>.manifestLinks(): List<ImageUrl> = mapNotNull { row ->
         is ManifestGridRow.InvalidLine -> null
     }
 }
-
-/** Detail pager: only URLs with a loaded thumbnail ([ImageGalleryUrlStatus.Openable]). */
-fun List<ImageUrl>.detailPagerUrls(loadState: ImageGalleryLoadState): List<ImageUrl> =
-    filter { loadState.isOpenable(it.url) }

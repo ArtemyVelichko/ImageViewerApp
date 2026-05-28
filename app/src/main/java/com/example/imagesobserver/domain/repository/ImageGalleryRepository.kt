@@ -13,6 +13,9 @@ interface ImageGalleryRepository {
 
     fun getManifestLinks(): List<ImageUrl>
 
+    /** Manifest links with [ImageGalleryUrlStatus.Openable] status, in manifest order. */
+    fun getOpenableManifestLinks(): List<ImageUrl>
+
     val loadState: StateFlow<ImageGalleryLoadState>
 
     fun getUrlStatus(imageUrl: ImageUrl): ImageGalleryUrlStatus

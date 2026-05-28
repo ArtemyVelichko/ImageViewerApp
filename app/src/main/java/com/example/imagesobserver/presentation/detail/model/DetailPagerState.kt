@@ -1,6 +1,5 @@
 package com.example.imagesobserver.presentation.detail.model
 
-import com.example.imagesobserver.domain.model.ImageGalleryUrlStatus
 import com.example.imagesobserver.domain.model.ImageUrl
 
 @JvmInline
@@ -15,17 +14,10 @@ value class SettledPageIndex(val index: Int) {
         SettledPageIndex(index.coerceIn(minimumValue, maximumValue))
 }
 
-/**
- * Single source of truth for the detail [androidx.compose.foundation.pager.HorizontalPager].
- */
+/** Openable-only pages for the detail [androidx.compose.foundation.pager.HorizontalPager]. */
 data class DetailPagerState(
-    val urls: List<ImageUrl> = emptyList(),
-    val urlStatuses: Map<String, ImageGalleryUrlStatus> = emptyMap(),
+    val pages: List<ImageUrl> = emptyList(),
     val initialPageIndex: InitialPageIndex = InitialPageIndex(0),
     val settledPageIndex: SettledPageIndex = SettledPageIndex(0),
     val visibleUrl: ImageUrl? = null,
-) {
-
-    fun statusFor(imageUrl: ImageUrl): ImageGalleryUrlStatus =
-        urlStatuses[imageUrl.url] ?: ImageGalleryUrlStatus.Loading
-}
+)
