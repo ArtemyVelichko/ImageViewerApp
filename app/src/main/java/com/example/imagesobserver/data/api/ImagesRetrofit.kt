@@ -29,8 +29,6 @@ class ImagesRetrofit @Inject constructor(
     companion object {
         const val BASE_URL = "https://it-link.ru/test/"
 
-        private const val TIMEOUT_SEC = 10L
-
         fun createHttpLoggingInterceptor(): HttpLoggingInterceptor =
             HttpLoggingInterceptor().apply {
                 level = if (ProjectConstants.RETROFIT_DEBUG_ENABLED) {
@@ -49,8 +47,9 @@ class ImagesRetrofit @Inject constructor(
                 .eventListenerFactory(networkLogEventListenerFactory)
                 .addInterceptor(networkLogInterceptor)
                 .addInterceptor(httpLoggingInterceptor)
-                .connectTimeout(TIMEOUT_SEC, TimeUnit.SECONDS)
-                .readTimeout(TIMEOUT_SEC, TimeUnit.SECONDS)
+                .connectTimeout(ProjectConstants.IMAGE_DOWNLOAD_TIMEOUT_SEC, TimeUnit.SECONDS)
+                .readTimeout(ProjectConstants.IMAGE_DOWNLOAD_TIMEOUT_SEC, TimeUnit.SECONDS)
+                .callTimeout(ProjectConstants.IMAGE_DOWNLOAD_TIMEOUT_SEC, TimeUnit.SECONDS)
                 .build()
 
         fun createRetrofit(client: OkHttpClient): Retrofit =

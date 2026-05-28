@@ -114,11 +114,7 @@ fun GridThumbnailCoilImage(
     ) {
         when {
             !resolved -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                )
+                ImageGridLoadingCell(modifier = Modifier.fillMaxSize())
             }
 
             thumbnailFile != null -> {
@@ -132,11 +128,6 @@ fun GridThumbnailCoilImage(
                         .crossfade(!fromMemoryCache)
                         .build()
                 }
-                val loadingBackgroundAlpha = if (fromMemoryCache) {
-                    GridThumbnailConstants.TRANSPARENT_ALPHA
-                } else {
-                    GridThumbnailConstants.FULL_ALPHA
-                }
                 Box(modifier = Modifier.fillMaxSize()) {
                     SubcomposeAsyncImage(
                         model = request,
@@ -146,15 +137,11 @@ fun GridThumbnailCoilImage(
                         onSuccess = { coilDecodeFailed = false },
                         onError = { coilDecodeFailed = true },
                         loading = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(
-                                            alpha = loadingBackgroundAlpha,
-                                        ),
-                                    ),
-                            )
+                            if (fromMemoryCache) {
+                                Box(modifier = Modifier.fillMaxSize())
+                            } else {
+                                ImageGridLoadingCell(modifier = Modifier.fillMaxSize())
+                            }
                         },
                         success = {
                             SubcomposeAsyncImageContent(modifier = Modifier.fillMaxSize())

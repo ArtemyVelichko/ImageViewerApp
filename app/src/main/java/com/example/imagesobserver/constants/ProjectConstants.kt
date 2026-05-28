@@ -38,6 +38,9 @@ object ProjectConstants {
     /** Max concurrent image downloads during background gallery prefetch. */
     const val IMAGE_GALLERY_PREFETCH_MAX_CONCURRENCY = 32
 
+    /** Max wall-clock time for downloading one image (OkHttp + coroutine guard). */
+    const val IMAGE_DOWNLOAD_TIMEOUT_SEC = 3L
+
     /** Multiplier applied to one-finger pan delta on the zoomed detail image. */
     const val IMAGE_PAN_DRAG_SENSITIVITY = 4f
 

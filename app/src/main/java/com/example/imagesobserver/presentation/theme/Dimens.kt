@@ -42,6 +42,8 @@ object Dimens {
     /** Small inline progress indicator (e.g. thumbnail slot while building Coil request). */
     val circularProgressIndicatorSmall = 24.dp
 
+    val circularProgressIndicatorStroke = 2.dp
+
     /**
      * Horizontal drag shorter than this is treated as image pan (when zoomed).
      * At or above — pager swipe between images.

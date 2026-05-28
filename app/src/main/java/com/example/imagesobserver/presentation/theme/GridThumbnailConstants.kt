@@ -10,9 +10,6 @@ object GridThumbnailConstants {
 
     const val FULL_ALPHA = 1f
 
-    /** Coil loading slot over a memory-cached thumbnail (no flash). */
-    const val TRANSPARENT_ALPHA = 0f
-
     /** First load attempt; skips network when memory cache already has a displayable file. */
     const val INITIAL_RELOAD_ATTEMPT = 0
 
