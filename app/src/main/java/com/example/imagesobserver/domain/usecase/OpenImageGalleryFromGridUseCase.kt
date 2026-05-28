@@ -1,33 +1,23 @@
 package com.example.imagesobserver.domain.usecase
 
+import com.example.imagesobserver.domain.model.ImageGalleryUrlStatus
 import com.example.imagesobserver.domain.model.ImageUrl
-import com.example.imagesobserver.domain.model.ManifestGridRow
 import com.example.imagesobserver.domain.repository.ImageGalleryRepository
 import javax.inject.Inject
 
-/** Prepares the detail pager from a grid tap and returns the start page index. */
+/** Validates a grid tap and returns the start page index in manifest order. */
 class OpenImageGalleryFromGridUseCase @Inject constructor(
     private val imageGalleryRepository: ImageGalleryRepository,
 ) {
 
     /**
-     * @return Pager start index, or null when detail must not open.
+     * @return Pager start index in manifest order, or null when detail must not open.
      */
-    operator fun invoke(
-        clicked: ImageUrl,
-        items: List<ManifestGridRow>,
-    ): Int? {
-        val openableUrls = imageGalleryRepository.getOpenableUrls()
-        if (clicked.url !in openableUrls) return null
-        val brokenUrls = imageGalleryRepository.getBrokenUrls()
-        val pagerUrls = items.mapNotNull { row ->
-            when (row) {
-                is ManifestGridRow.Link -> row.url
-                is ManifestGridRow.InvalidLine -> null
-            }
-        }.filter { it.url !in brokenUrls && it.url in openableUrls }
-        if (clicked !in pagerUrls) return null
-        imageGalleryRepository.setUrls(pagerUrls)
-        return pagerUrls.indexOf(clicked)
+    operator fun invoke(clicked: ImageUrl): Int? {
+        if (imageGalleryRepository.getUrlStatus(clicked) != ImageGalleryUrlStatus.Openable) return null
+        val links = imageGalleryRepository.getManifestLinks()
+        val startIndex = links.indexOfFirst { it.url == clicked.url }
+        if (startIndex < 0) return null
+        return startIndex
     }
 }
