@@ -18,11 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
-import com.example.imagesobserver.domain.model.GridThumbnailResult
 import com.example.imagesobserver.domain.model.ImageGalleryUrlStatus
 import com.example.imagesobserver.domain.model.ImageUrl
+import com.example.imagesobserver.presentation.images.model.GridThumbnailCallbacks
 import com.example.imagesobserver.presentation.theme.Dimens
-import java.io.File
 
 /** Stub cell for invalid manifest lines and for valid URLs that are not displayable as images. */
 @Composable
@@ -41,10 +40,8 @@ fun ImageGridPlaceholderCell(modifier: Modifier = Modifier) {
 @Composable
 fun ImageThumbnailCell(
     imageUrl: ImageUrl,
-    loadGridThumbnail: suspend (ImageUrl, Int, Int) -> File?,
-    peekGridThumbnail: (ImageUrl, Int, Int) -> GridThumbnailResult?,
+    callbacks: GridThumbnailCallbacks,
     urlStatus: ImageGalleryUrlStatus,
-    onRetryGridThumbnail: (ImageUrl, Int, Int) -> Unit,
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -61,12 +58,10 @@ fun ImageThumbnailCell(
         val hPx = cellSize.height.coerceAtLeast(1)
         GridThumbnailCoilImage(
             imageUrl = imageUrl,
-            loadGridThumbnail = loadGridThumbnail,
-            peekGridThumbnail = peekGridThumbnail,
+            callbacks = callbacks,
             targetWidthPx = wPx,
             targetHeightPx = hPx,
             urlStatus = urlStatus,
-            onRetryGridThumbnail = onRetryGridThumbnail,
             onClick = onClick,
             modifier = Modifier.fillMaxSize(),
         )

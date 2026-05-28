@@ -27,17 +27,16 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.imagesobserver.R
-import com.example.imagesobserver.domain.model.GridThumbnailResult
 import com.example.imagesobserver.domain.model.ImageGalleryLoadState
 import com.example.imagesobserver.domain.model.ImageGalleryUrlStatus
 import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.domain.model.ManifestGridRow
 import com.example.imagesobserver.presentation.images.components.ImageGridPlaceholderCell
 import com.example.imagesobserver.presentation.images.components.ImageThumbnailCell
+import com.example.imagesobserver.presentation.images.model.GridThumbnailCallbacks
 import com.example.imagesobserver.presentation.images.model.ImagesUiState
 import com.example.imagesobserver.presentation.theme.Dimens
 import com.example.imagesobserver.presentation.theme.ImagesObserverTheme
-import java.io.File
 import kotlinx.collections.immutable.persistentListOf
 
 @Composable
@@ -49,17 +48,23 @@ fun ImagesScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val galleryLoadState by viewModel.galleryLoadState.collectAsStateWithLifecycle()
 
+    val gridThumbnailCallbacks = remember(viewModel) {
+        GridThumbnailCallbacks(
+            load = viewModel::loadGridThumbnail,
+            peek = viewModel::peekGridThumbnail,
+            retry = viewModel::onRetryGridThumbnail,
+        )
+    }
+
     ImagesScreenContent(
         state = state,
         galleryLoadState = galleryLoadState,
         modifier = modifier,
         onOpenImageDetail = onOpenImageDetail,
-        loadGridThumbnail = viewModel::loadGridThumbnail,
-        peekGridThumbnail = viewModel::peekGridThumbnail,
+        gridThumbnailCallbacks = gridThumbnailCallbacks,
         onGridContentWidthChanged = viewModel::onGridContentWidthChanged,
         onGridViewportChanged = viewModel::onGridViewportChanged,
         openDetailFromGrid = viewModel::openDetailFromGrid,
-        onRetryGridThumbnail = viewModel::onRetryGridThumbnail,
     )
 }
 
@@ -68,12 +73,10 @@ fun ImagesScreenContent(
     state: ImagesUiState,
     galleryLoadState: ImageGalleryLoadState,
     onOpenImageDetail: (Int) -> Unit,
-    loadGridThumbnail: suspend (ImageUrl, Int, Int) -> File?,
-    peekGridThumbnail: (ImageUrl, Int, Int) -> GridThumbnailResult?,
+    gridThumbnailCallbacks: GridThumbnailCallbacks,
     onGridContentWidthChanged: (gridWidthPx: Int) -> Unit,
     onGridViewportChanged: (visibleRowIndices: List<Int>) -> Unit,
     openDetailFromGrid: (ImageUrl) -> Int?,
-    onRetryGridThumbnail: (ImageUrl, Int, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -147,10 +150,8 @@ fun ImagesScreenContent(
                                     val urlStatus = galleryLoadState.status(row.url.url)
                                     ImageThumbnailCell(
                                         imageUrl = row.url,
-                                        loadGridThumbnail = loadGridThumbnail,
-                                        peekGridThumbnail = peekGridThumbnail,
+                                        callbacks = gridThumbnailCallbacks,
                                         urlStatus = urlStatus,
-                                        onRetryGridThumbnail = onRetryGridThumbnail,
                                         onClick = if (urlStatus == ImageGalleryUrlStatus.Openable) {
                                             {
                                                 openDetailFromGrid(row.url)?.let(onOpenImageDetail)
@@ -179,12 +180,11 @@ fun ImagesScreenContent(
     }
 }
 
-private val previewOnRetryGridThumbnail: (ImageUrl, Int, Int) -> Unit = { _, _, _ -> }
-
-private val previewLoadGridThumbnail: suspend (ImageUrl, Int, Int) -> File? = { _, _, _ -> null }
-
-private val previewPeekGridThumbnail: (ImageUrl, Int, Int) -> GridThumbnailResult? =
-    { _, _, _ -> null }
+private val previewGridThumbnailCallbacks = GridThumbnailCallbacks(
+    load = { _, _, _ -> null },
+    peek = { _, _, _ -> null },
+    retry = { _, _, _ -> },
+)
 
 /** Preview stub: grid clicks do not open detail. */
 private val previewOpenDetailFromGrid: (ImageUrl) -> Int? = { null }
@@ -212,12 +212,10 @@ private fun ImagesScreenGridPreview() {
                 ),
             ),
             onOpenImageDetail = {},
-            loadGridThumbnail = previewLoadGridThumbnail,
-            peekGridThumbnail = previewPeekGridThumbnail,
+            gridThumbnailCallbacks = previewGridThumbnailCallbacks,
             onGridContentWidthChanged = {},
             onGridViewportChanged = {},
             openDetailFromGrid = previewOpenDetailFromGrid,
-            onRetryGridThumbnail = previewOnRetryGridThumbnail,
         )
     }
 }
@@ -230,12 +228,10 @@ private fun ImagesScreenLoadingPreview() {
             state = ImagesUiState(isLoading = true),
             galleryLoadState = ImageGalleryLoadState(),
             onOpenImageDetail = {},
-            loadGridThumbnail = previewLoadGridThumbnail,
-            peekGridThumbnail = previewPeekGridThumbnail,
+            gridThumbnailCallbacks = previewGridThumbnailCallbacks,
             onGridContentWidthChanged = {},
             onGridViewportChanged = {},
             openDetailFromGrid = previewOpenDetailFromGrid,
-            onRetryGridThumbnail = previewOnRetryGridThumbnail,
         )
     }
 }
@@ -251,12 +247,10 @@ private fun ImagesScreenErrorPreview() {
             ),
             galleryLoadState = ImageGalleryLoadState(),
             onOpenImageDetail = {},
-            loadGridThumbnail = previewLoadGridThumbnail,
-            peekGridThumbnail = previewPeekGridThumbnail,
+            gridThumbnailCallbacks = previewGridThumbnailCallbacks,
             onGridContentWidthChanged = {},
             onGridViewportChanged = {},
             openDetailFromGrid = previewOpenDetailFromGrid,
-            onRetryGridThumbnail = previewOnRetryGridThumbnail,
         )
     }
 }

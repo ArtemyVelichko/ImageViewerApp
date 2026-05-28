@@ -29,9 +29,9 @@ import com.example.imagesobserver.R
 import com.example.imagesobserver.domain.model.GridThumbnailResult
 import com.example.imagesobserver.domain.model.ImageGalleryUrlStatus
 import com.example.imagesobserver.domain.model.ImageUrl
+import com.example.imagesobserver.presentation.images.model.GridThumbnailCallbacks
 import com.example.imagesobserver.presentation.theme.Dimens
 import com.example.imagesobserver.presentation.theme.GridThumbnailConstants
-import java.io.File
 
 /**
  * Grid cell image for [com.example.imagesobserver.presentation.images.ImagesScreen] only.
@@ -40,10 +40,8 @@ import java.io.File
 @Composable
 fun GridThumbnailCoilImage(
     imageUrl: ImageUrl,
-    loadGridThumbnail: suspend (ImageUrl, Int, Int) -> File?,
-    peekGridThumbnail: (ImageUrl, Int, Int) -> GridThumbnailResult?,
+    callbacks: GridThumbnailCallbacks,
     urlStatus: ImageGalleryUrlStatus,
-    onRetryGridThumbnail: (ImageUrl, Int, Int) -> Unit,
     onClick: (() -> Unit)?,
     targetWidthPx: Int,
     targetHeightPx: Int,
@@ -62,7 +60,7 @@ fun GridThumbnailCoilImage(
 
     val context = LocalContext.current
     val cachedEntry = remember(imageUrl, targetWidthPx, targetHeightPx) {
-        peekGridThumbnail(imageUrl, targetWidthPx, targetHeightPx)
+        callbacks.peek(imageUrl, targetWidthPx, targetHeightPx)
     }
     var thumbnailFile by remember(imageUrl, targetWidthPx, targetHeightPx) {
         mutableStateOf(
@@ -78,11 +76,11 @@ fun GridThumbnailCoilImage(
 
     suspend fun loadThumbnail() {
         resolved = false
-        thumbnailFile = loadGridThumbnail(imageUrl, targetWidthPx, targetHeightPx)
+        thumbnailFile = callbacks.load(imageUrl, targetWidthPx, targetHeightPx)
         resolved = true
     }
 
-    LaunchedEffect(imageUrl, targetWidthPx, targetHeightPx, loadGridThumbnail, reloadAttempt) {
+    LaunchedEffect(imageUrl, targetWidthPx, targetHeightPx, reloadAttempt) {
         if (reloadAttempt == GridThumbnailConstants.INITIAL_RELOAD_ATTEMPT &&
             cachedEntry is GridThumbnailResult.Displayable
         ) {
@@ -92,7 +90,7 @@ fun GridThumbnailCoilImage(
     }
 
     val onRetry: () -> Unit = {
-        onRetryGridThumbnail(imageUrl, targetWidthPx, targetHeightPx)
+        callbacks.retry(imageUrl, targetWidthPx, targetHeightPx)
         reloadAttempt++
     }
 
