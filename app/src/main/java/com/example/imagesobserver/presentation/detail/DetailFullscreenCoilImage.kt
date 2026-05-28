@@ -36,59 +36,56 @@ fun DetailFullscreenCoilImage(
     imageModifier: Modifier = Modifier.fillMaxSize(),
     contentScale: ContentScale = ContentScale.Fit,
 ) {
-    val request = rememberDetailCoilImageRequest(
-        imageUrl = imageUrl,
-        loadCachedOriginal = loadCachedOriginal,
-    )
-
+    val context = LocalContext.current
     val placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
+    var model by remember(imageUrl) { mutableStateOf<Any?>(null) }
+
+    LaunchedEffect(imageUrl, loadCachedOriginal) {
+        model = loadCachedOriginal(imageUrl) ?: imageUrl.url
+    }
 
     Box(modifier = modifier) {
-        SubcomposeAsyncImage(
-            model = request,
-            contentDescription = stringResource(R.string.content_description_image),
-            modifier = imageModifier,
-            loading = {
+        when (val data = model) {
+            null -> {
                 Image(
                     painter = placeholder,
                     contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = imageModifier,
                     contentScale = contentScale,
                 )
-            },
-            error = {
-                ImageLoadFailedContent(modifier = Modifier.fillMaxSize())
-            },
-            success = {
-                SubcomposeAsyncImageContent(
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = contentScale,
+            }
+
+            else -> {
+                val request = remember(data) {
+                    ImageRequest.Builder(context)
+                        .data(data)
+                        .crossfade(data !is File)
+                        .build()
+                }
+                SubcomposeAsyncImage(
+                    model = request,
+                    contentDescription = stringResource(R.string.content_description_image),
+                    modifier = imageModifier,
+                    loading = {
+                        Image(
+                            painter = placeholder,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = contentScale,
+                        )
+                    },
+                    error = {
+                        ImageLoadFailedContent(modifier = Modifier.fillMaxSize())
+                    },
+                    success = {
+                        SubcomposeAsyncImageContent(
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = contentScale,
+                        )
+                    },
                 )
-            },
-        )
-    }
-}
-
-@Composable
-private fun rememberDetailCoilImageRequest(
-    imageUrl: ImageUrl,
-    loadCachedOriginal: suspend (ImageUrl) -> File?,
-): ImageRequest {
-    val context = LocalContext.current
-    var dataSource by remember(imageUrl) { mutableStateOf<Any>(imageUrl.url) }
-
-    LaunchedEffect(imageUrl, loadCachedOriginal) {
-        val cachedFile = loadCachedOriginal(imageUrl)
-        if (cachedFile != null) {
-            dataSource = cachedFile
+            }
         }
-    }
-
-    return remember(dataSource) {
-        ImageRequest.Builder(context)
-            .data(dataSource)
-            .crossfade(true)
-            .build()
     }
 }
 

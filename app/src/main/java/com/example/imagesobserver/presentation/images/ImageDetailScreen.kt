@@ -20,9 +20,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.imagesobserver.R
 import com.example.imagesobserver.domain.model.ImageUrl
 import com.example.imagesobserver.presentation.detail.ImageDetailViewModel
+import com.example.imagesobserver.presentation.detail.model.DetailPagerState
 import com.example.imagesobserver.presentation.systemui.ImmersiveSystemUi
 import java.io.File
 
@@ -58,8 +59,7 @@ fun ImageDetailScreen(
         viewModel.load(startIndex)
     }
 
-    val urls by viewModel.urls.collectAsStateWithLifecycle()
-    val initialPageFromVm by viewModel.initialPageIndex.collectAsStateWithLifecycle()
+    val pagerState by viewModel.pagerState.collectAsStateWithLifecycle()
 
     ImmersiveSystemUi(systemBarsVisible = isChromeVisible)
 
@@ -84,13 +84,13 @@ fun ImageDetailScreen(
                     actions = {
                         TextButton(
                             onClick = { viewModel.shareCurrentImageUrl() },
-                            enabled = urls.isNotEmpty(),
+                            enabled = pagerState.urls.isNotEmpty(),
                         ) {
                             Text(stringResource(R.string.image_share))
                         }
                         TextButton(
                             onClick = { viewModel.openCurrentImageInBrowser() },
-                            enabled = urls.isNotEmpty(),
+                            enabled = pagerState.urls.isNotEmpty(),
                         ) {
                             Text(stringResource(R.string.image_open_in_browser))
                         }
@@ -110,7 +110,7 @@ fun ImageDetailScreen(
                 .fillMaxSize()
                 .padding(contentPadding)
                 .then(
-                    if (urls.isEmpty()) {
+                    if (pagerState.urls.isEmpty()) {
                         Modifier.clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
@@ -121,21 +121,16 @@ fun ImageDetailScreen(
                     },
                 ),
         ) {
-            if (urls.isEmpty()) {
+            if (pagerState.urls.isEmpty()) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else {
-                key(urls) {
-                    val firstPage = initialPageFromVm.coerceIn(0, urls.lastIndex)
-
-                    DetailPagerSection(
-                        urls = urls,
-                        initialPageIndex = firstPage,
-                        loadCachedOriginal = viewModel::loadCachedOriginal,
-                        onToggleChrome = toggleChrome,
-                        onPageChanged = viewModel::onPageChanged,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
+                DetailPagerSection(
+                    state = pagerState,
+                    loadCachedOriginal = viewModel::loadCachedOriginal,
+                    onToggleChrome = toggleChrome,
+                    onPageSettled = viewModel::onPageSettled,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
     }
@@ -144,29 +139,40 @@ fun ImageDetailScreen(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DetailPagerSection(
-    urls: List<ImageUrl>,
-    initialPageIndex: Int,
+    state: DetailPagerState,
     loadCachedOriginal: suspend (ImageUrl) -> File?,
     onToggleChrome: () -> Unit,
-    onPageChanged: (Int) -> Unit,
+    onPageSettled: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val pagerState = rememberPagerState(
-        initialPage = initialPageIndex,
+    val urls = state.urls
+    val pagerUiState = rememberPagerState(
+        initialPage = state.initialPageIndex.coerceIn(0, urls.lastIndex).index,
         pageCount = { urls.size },
     )
+    val settledPageIndexState = rememberUpdatedState(state.settledPageIndex)
+    val urlSignature = remember(urls) { urls.joinToString(separator = "\u0000") { it.url } }
 
-    LaunchedEffect(pagerState.settledPage) {
-        onPageChanged(pagerState.settledPage)
+    LaunchedEffect(pagerUiState.settledPage) {
+        onPageSettled(pagerUiState.settledPage)
+    }
+
+    LaunchedEffect(urlSignature) {
+        if (urls.isEmpty()) return@LaunchedEffect
+        val target = settledPageIndexState.value.coerceIn(0, urls.lastIndex).index
+        if (pagerUiState.settledPage != target) {
+            pagerUiState.scrollToPage(target)
+        }
     }
 
     HorizontalPager(
-        state = pagerState,
+        state = pagerUiState,
         modifier = modifier.fillMaxSize(),
         beyondViewportPageCount = 1,
+        key = { page -> urls[page].url },
     ) { page ->
         val imageUrl = urls[page]
-        val zoomState = rememberZoomPanState(imageKey = "${imageUrl.url}_$page")
+        val zoomState = rememberZoomPanState(imageKey = imageUrl.url)
 
         ZoomableFitAsyncImage(
             imageUrl = imageUrl,
